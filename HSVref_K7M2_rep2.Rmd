@@ -1,0 +1,1415 @@
+---
+title: "Repeat K7M2 scRNAseq with HSV exon reference"
+author: "Emily Franz"
+date: "`r format(Sys.time(), '%m/%d/%Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    number_sections: false
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  tidy = TRUE,
+  echo = TRUE,
+  cache = TRUE,
+  collapse = TRUE,
+  tidy.opts = list(width.cutoff = 95),
+  message = FALSE,
+  warning = FALSE,
+  cache.lazy = FALSE)
+```
+
+```{r lib, cache = FALSE}
+library(Seurat)
+library(tidyverse)
+library(ggsci)
+library(rrrSingleCellUtils)
+library(ggplot2)
+library(patchwork)
+source("scSeurat-addhsv.R")
+# Set the random generator seed so that results are reproducible.
+set.seed(888)
+
+# Create files for saving if do not exist
+if(!file.exists("Data")){
+  dir.create("Data")
+}
+if(!file.exists("Plots")){
+  dir.create("Plots")
+}
+if(!file.exists("Plots/K7M2_2")){
+  dir.create("Plots/K7M2_2")
+}
+```
+
+## Tumor Samples - Mouse
+Load all the different K7M2 datasets, note that HSV genes included but 
+filter out human. (K7M2 is a mouse osteosarcoma model.)
+
+```{r load, fig.height=5, fig.width=5}
+sample_names <- c('S0238_hsv',
+                  'S0239_hsv',
+                  'S0240_hsv',
+                  'S0241_hsv')
+
+sample_labels <- c("1 - Control",
+                   "2 - oHSV",
+                   "3 - Trabectedin",
+                   "4 - oHSV+Trabectedin")
+# correlate sample names and sample labels
+names(sample_labels) <- sample_names
+
+sample_titles <- c("Control",
+                   "oHSV",
+                   "Trabectedin",
+                   "Combination")
+names(sample_titles) <- sample_names
+
+qcplots <- list()
+for (item in sample_names) {
+  obj <- tenx_load_qc(paste("/gpfs0/home2/gdrobertslab/lab/Counts/",
+                            item,
+                            "/filtered_feature_bc_matrix/",
+                            sep = ""),
+                      mouse_hsv = TRUE)
+
+  plot1 <- FeatureScatter(obj,
+                          feature1 = "nCount_RNA",
+                          feature2 = "percent.mt") +
+    theme(legend.position="none") +
+    theme(panel.grid = element_line(colour = "grey80",
+                                    linetype = "solid"))
+  
+  plot2 <- FeatureScatter(obj,
+                          feature1 = "nCount_RNA",
+                          feature2 = "nFeature_RNA")  +
+    theme(legend.position="none") +
+    theme(panel.grid = element_line(colour = "grey80",
+                                    linetype = "solid"))
+  
+  qcplots[[sample_titles[[item]]]] <- plot1 + plot2 +
+    plot_annotation(title = sample_titles[[item]])
+  
+  assign(sample_titles[[item]], obj) #makes each sample an individual Seurat obj without overwriting
+}
+```
+
+Look at HSV transcripts vs mt transcripts and HSV transcripts vs nCounts.
+
+oHSV-treated sample:
+
+```{r scatter_hsv, fig.height=5, fig.width=10}
+plot1_hsv <- FeatureScatter(oHSV,
+                            feature1 = "nCount_RNA",
+                            feature2 = "percent.hsv") +
+  theme(legend.position="none") +
+  theme(axis.line = element_line(colour = "grey80"))
+
+plot2_hsv <- FeatureScatter(oHSV,
+                            feature1 = "percent.mt",
+                            feature2 = "percent.hsv") +
+  theme(legend.position="none") 
+
+plot1_hsv +
+  plot2_hsv +
+  plot_annotation(title = 'oHSV-treated Tumor')
+```
+
+Combination-treated sample:
+
+```{r scatter_combo, fig.height=5, fig.width=10}
+plot1_hsv <- FeatureScatter(Combination,
+                            feature1 = "nCount_RNA",
+                            feature2 = "percent.hsv") +
+  theme(legend.position="none")
+
+plot2_hsv <- FeatureScatter(Combination,
+                            feature1 = "percent.mt",
+                            feature2 = "percent.hsv") +
+  theme(legend.position="none")
+
+plot1_hsv +
+  plot2_hsv +
+  plot_annotation(title = 'Combination-treated Tumor')
+```
+
+Using the previous violin plots, choose cutoffs to proceed with for processing.
+
+```{r load_final}
+# set max ncounts 
+nCount_RNA_max <- list(55000,
+                       100000,
+                       75000,
+                       100000)
+names(nCount_RNA_max) <- sample_names
+
+# set min for ncounts 
+nCount_RNA_min <- c(800,
+                    800,
+                    800,
+                    800)
+names(nCount_RNA_min) <- sample_names
+
+# set max nfeatures 
+nFeature_RNA_max <- list(6500,
+                         7700,
+                         7000,
+                         7500)
+names(nFeature_RNA_max) <- sample_names
+
+# set % mt genes 
+mt_max <- c(20,
+            20,
+            20,
+            20)
+names(mt_max) <- sample_names
+
+# do not need to plot violin plot since completed this previously to determine the cutoffs used here.
+for (item in sample_names) {
+  obj <- tenx_load_qc(paste("/gpfs0/home2/gdrobertslab/lab/Counts/",
+                            item,
+                            "/filtered_feature_bc_matrix/",
+                            sep = ""),
+                      mouse_hsv = TRUE,
+                      violin_plot = FALSE)
+  
+  obj <- subset(obj,
+                subset = 
+                  nCount_RNA < nCount_RNA_max[[item]] &
+                  nCount_RNA > nCount_RNA_min[[item]] &
+                  nFeature_RNA < nFeature_RNA_max[[item]] &
+                  percent.mt < mt_max[[item]])
+  
+  obj$treatment <- sample_labels[[item]]
+  
+  # Make each sample an individual Seurat obj without overwriting
+  assign(sample_titles[[item]], obj)
+}
+```
+
+# Normalize and Process
+
+```{r process, fig.height=3, fig.width=3}
+K7M2_hsv <- merge(Control,
+                  y = c(oHSV,
+                        Trabectedin,
+                        Combination),
+                  add.cell.ids = c("Control",
+                                   "oHSV",
+                                   "Trabectedin",
+                                   "Combination"),
+                  project = "Trabectedin plus HSV1716 in Low Passage K7M2")
+
+#### Normalize, scale, process, cluster ####
+K7M2_hsv <- 
+  NormalizeData(K7M2_hsv) %>%
+  ScaleData() %>%
+  FindVariableFeatures()
+
+#### Variable Features ####
+# Use Elbow Plots to determine the PCs to use
+
+K7M2_hsv <- 
+  RunPCA(K7M2_hsv,
+         features = VariableFeatures(object = K7M2_hsv))
+
+ElbowPlot(K7M2_hsv,
+          ndims = 30)
+```
+
+
+### Clustering Resolution {.tabset}
+
+#### Res0.1
+```{r umap, fig.height=5, fig.width=10}
+K7M2_hsv <- 
+  FindNeighbors(K7M2_hsv, dims = 1:17) %>%
+  FindClusters(resolution = 0.1) %>%
+  RunUMAP(dims = 1:17)
+
+DimPlot(K7M2_hsv,
+        reduction = "umap",
+        split.by = "treatment",
+        pt.size = 1,
+        label = T) +
+  coord_fixed()
+```
+
+#### Res0.2
+```{r, umap2, fig.height=5, fig.width=10}
+K7M2_hsv <- 
+  FindClusters(K7M2_hsv,
+               resolution = 0.2) %>%
+  RunUMAP(dims = 1:17)
+
+DimPlot(K7M2_hsv,
+        reduction = "umap",
+        split.by = "treatment",
+        pt.size = 1,
+        label = T) +
+  coord_fixed()
+```
+
+#### Res0.3
+```{r, umap3, fig.height=5, fig.width=10}
+K7M2_hsv <- 
+  FindClusters(K7M2_hsv,
+               resolution = 0.3) %>%
+  RunUMAP(dims = 1:17)
+
+DimPlot(K7M2_hsv,
+        reduction = "umap",
+        split.by = "treatment",
+        pt.size = 1,
+        label = T) +
+  coord_fixed()
+```
+
+Downsample so there is the same number of cells in each treatment group.
+
+```{r downsample, fig.height=5, fig.width=10}
+# Subset the highest number that makes all treatment groups equal in cell number
+# subset # of cells from each ident of the seurat object 
+Idents(K7M2_hsv) <- K7M2_hsv$treatment
+K7M2_hsv_even <- subset(K7M2_hsv,
+                        downsample = table(K7M2_hsv$treatment) %>%
+                          min())
+
+# Check that worked: cell numbers across treatments should be equal
+table(K7M2_hsv$treatment)
+
+DimPlot(K7M2_hsv_even,
+        split.by = "treatment") +
+  coord_fixed()
+
+save(K7M2_hsv_even,
+     file = "Data/K7M2_hsv_even_rep2.RData")
+```
+
+# Cell Identities
+
+## DGEA by Cluster
+
+Differentially Expressed Genes by Cluster (res0.3):
+
+```{r deg, dependson = c("process","umap","downsample")}
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$RNA_snn_res.0.3
+K7M2_hsv_markers <- FindAllMarkers(K7M2_hsv_even,
+                                   min.pct = 0.25,
+                                   logfc.threshold = 0.25,
+                                   only.pos = T)
+```
+
+```{r degt, dependson="deg"}
+
+# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
+# Print top 10 in each cluster
+K7M2_hsv_markers %>%
+  group_by(cluster) %>%
+  top_n(n = 10, wt = avg_log2FC) -> t
+
+# Get dataframe into proper format 
+t <- as.data.frame(t)
+t$cluster <- as.numeric(as.character(t$cluster))
+t <- t[order(t$cluster),]
+t <- t[,c(7, 1:6)]
+t <- t[,c(7, 1:6)]
+#could also use arrange() to sort by column
+
+# Create interactive datatable showing top 10 DEG in each cluster 
+DT::datatable(t, 
+              rownames = FALSE,
+              extensions = c('FixedColumns',
+                             'Buttons'),
+              options = list(
+                pageLength = 10,
+                scrollX = TRUE,
+                scrollCollapse = TRUE,
+                dom = 'Bfrtip',
+                buttons = c('copy',
+                            'csv',
+                            'excel')
+              ))
+```
+
+## SingleR Cell Predictions
+
+This is an automatic prediction method for cell types. Here, I specifically use the SingleR mouse immune reference for predicted cell assignment of cell clusters. Often this method is a general assignment and may miss more specific cell subtypes, especially for macrophages.
+
+```{r singlr, dependson = c("process","umap","downsample")}
+# Automatic prediction of cell types using SingleR
+# BiocManager::install("SingleCellExperiment")
+library(SingleR)
+library(celldex)
+library(SingleCellExperiment)
+
+
+# Convert the Seurat object to a SCE object
+K7M2_hsv_even_sce <- as.SingleCellExperiment(K7M2_hsv_even)
+
+
+# Load the mouse reference library & immune-specific mouse data
+ref1 <- MouseRNAseqData()
+ref2 <- ImmGenData()
+
+# Make cell type predictions using SingleR
+Tumor_hsv_pred_types <- SingleR(test = K7M2_hsv_even_sce,
+                                ref = list(ref1,
+                                           ref2),
+                                labels = list(ref1$label.main,
+                                              ref2$label.main))
+# Clean up environment
+rm(K7M2_hsv_even_sce, ref1, ref2)
+```
+
+```{r singler_cont, dependson= "singlr"}
+# Transfer labels back to the Seurat object and plot
+K7M2_hsv_even$singleR2 <- Tumor_hsv_pred_types$labels
+
+maxv <- apply(Tumor_hsv_pred_types$scores, 
+              MARGIN = 1, 
+              function(x) max(x,
+                              na.rm = TRUE))
+hist(maxv,
+     n = 200)
+
+K7M2_hsv_even$singleRscore <- maxv  #scores may be a matrix
+
+as.data.frame(K7M2_hsv_even@meta.data) %>%
+  as_tibble() %>%
+  ggplot(aes(x = singleRscore)) +
+  geom_histogram(bins = 200) +
+  facet_wrap(~singleR2,
+             ncol = 3,
+             scales = "free_y") #****
+  
+table(K7M2_hsv_even$singleR2,
+      K7M2_hsv_even$treatment)
+```
+
+```{r singlr_plot, dependson= "singlr"}
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$singleR2 
+
+DimPlot(K7M2_hsv_even,
+        reduction = "umap",
+        pt.size = 0.5,
+        label = T,
+        repel = T) +
+  coord_fixed() +
+  ggtitle("Mouse Reference")
+```
+
+```{r singlr_plot2, fig.width=12, fig.height=5, dependson= "singlr"}
+# Rename cell ids
+K7M2_hsv_even <- 
+  RenameIdents(K7M2_hsv_even,
+               "Dendritic cells" = "DC",
+               "Tgd" = "T cells",
+               "Stem cells" = "Tumor cells",
+               "Granulocytes" = "Neutrophils",
+               "Erythrocytes" = "Tumor cells",
+               "Adipocytes" = "Tumor cells",
+               "Fibroblasts" = "Tumor cells") %>%
+  StashIdent(save.name = "cell_identities")
+
+k7m2_ids <- DimPlot(K7M2_hsv_even,
+                    reduction = "umap",
+                    pt.size = 0.5,
+                    label = T,
+                    repel = T,
+                    split.by = "treatment") +
+  coord_fixed() +
+  ggtitle("Mouse Reference")
+k7m2_ids
+pdf("Plots/K7M2_2/k7m2_ids_dim.pdf", height = 10, width = 20)
+k7m2_ids
+dev.off()
+```
+
+```{r cell_subset, warnings = TRUE}
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$cell_identities 
+for (cell_id in levels(K7M2_hsv_even)) {
+  cell_type <- subset(K7M2_hsv_even,
+                      idents = cell_id)
+  Idents(cell_type) <- cell_type$treatment
+  cell_type <- subset(cell_type,
+                      downsample = table(cell_type$treatment) %>%
+                        min())
+  print(cell_id)
+  print(table(cell_type$treatment))
+  if (min(table(cell_type$treatment)) > 50) {
+    assign(cell_id, cell_type)
+  } else {
+    print("Insufficent cell number for ", cell_id)
+  }
+}
+
+```
+
+```{r ifng}
+k7m2_ifn_vln <- VlnPlot(K7M2_hsv_even,
+                        features = "Ifng",
+                        group.by = "treatment")
+k7m2_ifn_vln
+
+pdf("Plots/K7M2_2/k7m2_ab_vln.pdf", height = 5, width = 5)
+k7m2_ifn_vln
+dev.off()
+
+DotPlot(K7M2_hsv_even,
+        features = "Ifng",
+        scale = F,
+        group.by = "treatment",
+        cols = c("lightgoldenrod", "darkred"),
+        dot.min = 0)
+
+k7m2_ifn_feat <- r_feature_plot(K7M2_hsv_even,
+                                features = "Ifng",
+                                split.by = "treatment",
+                                order = TRUE) +
+  theme(aspect.ratio = 1)
+
+k7m2_ifn_feat 
+
+pdf("Plots/K7M2_2/k7m2_ifn_feat.pdf", height = 6, width = 12)
+k7m2_ifn_feat
+dev.off()
+```
+
+```{r tnk, fig.width=15, fig.height=15}
+TNK <- subset(K7M2_hsv_even,
+              idents = c("T cells",
+                         "NK cells",
+                         "NKT",
+                         "ILC"))
+
+DimPlot(TNK,
+        split.by = "treatment")
+
+TNK %>%
+  RunPCA() %>%
+  FindNeighbors(dims = 1:17) %>%
+  FindClusters() %>%
+  RunUMAP(dims = 1:17)
+
+DimPlot(TNK,
+        split.by = "treatment")
+
+FeaturePlot(TNK,
+            features = c("Cd8a",
+                         "Cd4",
+                         "Foxp3",
+                         "Nkg7"),
+            split.by = "treatment",
+            order = T,
+            pt.size = 0.5)
+
+FeaturePlot(TNK,
+            features = c("Tnf",
+                         "Ifng",
+                         "Gzmb",
+                         "Prf"),
+            split.by = "treatment",
+            order = T,
+            pt.size = 0.5)
+```
+
+```{r mac, fig.width=15, fig.height=15}
+Mac <- subset(K7M2_hsv_even,
+              idents = c("Macrophages",
+                         "Monocytes"))
+
+DimPlot(Mac,
+        split.by = "treatment")
+
+Mac %>%
+  RunPCA() %>%
+  FindNeighbors(dims = 1:17) %>%
+  FindClusters() %>%
+  RunUMAP(dims = 1:17)
+
+DimPlot(Mac,
+        split.by = "treatment")
+
+FeaturePlot(Mac,
+            features = c("Ccl2",
+                         "Cxcl5",
+                         "Cx3cl1",
+                         "Ccl7"),
+            split.by = "treatment",
+            order = T,
+            pt.size = 0.5)
+
+FeaturePlot(Mac,
+            features = c("Arg1",
+                         "Arg2",
+                         "Tgfb1",
+                         "Il1r"),
+            split.by = "treatment",
+            order = T,
+            pt.size = 0.5)
+
+#hi logfc in combo vs hsv
+FeaturePlot(K7M2_hsv_even,
+            features = c("Gzmd",
+                         "Gzme",
+                         "Ccl24",
+                         "Gzmf"),
+            split.by = "treatment",
+            order = T,
+            pt.size = 0.5)
+
+FeaturePlot(TNK,
+            features = c("Gzmd",
+                         "Gzme",
+                         "Gzmf"),
+            split.by = "treatment",
+            order = T,
+            pt.size = 0.5)
+
+VlnPlot(K7M2_hsv_even,
+        features = c("Gzmd",
+                     "Gzme",
+                     "Ccl24",
+                     "Gzmf"),
+        group.by = "treatment")
+
+DotPlot(K7M2_hsv_even,
+        features = c("Gzmd",
+                     "Gzme",
+                     "Ccl24",
+                     "Gzmf"),
+        group.by = "treatment",
+        scale = F)
+
+#lo/neg logfc in combo vs hsv
+FeaturePlot(K7M2_hsv_even,
+            features = c("S100a9",
+                         "S100a8",
+                         "Isg15",
+                         "Irg1"),
+            split.by = "treatment",
+            order = T,
+            pt.size = 0.5)
+
+DotPlot(K7M2_hsv_even,
+            features = c("S100a9",
+                         "S100a8",
+                         "Isg15",
+                         "Irg1"),
+            group.by = "treatment",
+        scale = F)
+```
+
+
+```{r dgea}
+library(msigdbr)
+library(clusterProfiler)
+library(RColorBrewer)
+
+# Define function
+DGEA <- function(data, 
+                 spec = "mouse", 
+                 category = "H") {
+ 
+  if (spec == "human") {
+  oref <- HumanPrimaryCellAtlasData()
+  } else if (spec == "mouse") {
+  oref <- MouseRNAseqData()
+  } 
+  
+  # Preparing clusterProfiler to perform hypergeometric test on msigdb signatures
+  if (spec == "human") {
+    if (category == "H") {
+    # m_t2g.c2 <- msigdbr(species = "Homo sapiens", category = "C2") %>%
+    #   dplyr::select(gs_name, human_gene_symbol)
+    # m_t2g.c6 <- msigdbr(species = "Homo sapiens", category = "C6") %>%
+    #   dplyr::select(gs_name, human_gene_symbol)
+    m_t2g.h <- msigdbr(species = "Homo sapiens", category = "H") %>%
+      dplyr::select(gs_name, human_gene_symbol)
+    m_t2n.h <- msigdbr(species = "Homo sapiens", category = "H") %>% 
+      dplyr::select(gs_id, gs_name) 
+    }
+    #m_t2g=rbind(m_t2g.c2,m_t2g.c6)
+    # msigdb signature to use
+    msig.gene.set = m_t2g.h
+    msig.name = m_t2n.h
+    
+  } 
+  
+  else if (spec == "mouse") {
+    if (category == "H") {
+      
+    m_t2g.h <- msigdbr(species = "Mus musculus", category = "H") %>%
+      dplyr::select(gs_name, gene_symbol)
+    m_t2n.h <- msigdbr(species = "Mus musculus", category = "H") %>% 
+      dplyr::select(gs_id, gs_name)
+    #m_t2g=rbind(m_t2g.c2,m_t2g.c6)
+    
+    # msigdb signature to use
+    msig.gene.set = m_t2g.h
+    msig.name = m_t2n.h
+    }
+    
+    else if (category == "C2") {
+    m_t2g.c2 <- msigdbr(species = "Mus musculus", category = "C2") %>%
+     dplyr::select(gs_name, gene_symbol)
+    m_t2n.c2 <- msigdbr(species = "Mus musculus", category = "C2") %>%
+     dplyr::select(gs_id, gs_name)
+    
+    # msigdb signature to use
+    msig.gene.set = m_t2g.c2
+    msig.name = m_t2n.c2
+    }
+    
+    else if (category == "C7") {
+    m_t2g.c7 <- msigdbr(species = "Mus musculus", category = "C7") %>%
+      dplyr::select(gs_name, gene_symbol)
+    m_t2n.c7 <- msigdbr(species = "Mus musculus", category = "C7") %>% 
+      dplyr::select(gs_id, gs_name)
+    #m_t2g=rbind(m_t2g.c7,m_t2g.c7)
+    
+    # msigdb signature to use
+    msig.gene.set = m_t2g.c7
+    msig.name = m_t2n.c7
+    }
+  }
+
+  # getting log normalized data for specific cluster
+  clust.ids = sort(unique(data@active.ident))
+  new.cluster.ids = rep(NA, length(clust.ids))
+  
+  # store top 30 pathway enrichment analysis
+  em = NULL
+ 
+  for (i in 1:length(clust.ids)){
+    clust <- GetAssayData(subset(x = data,idents=clust.ids[i]),slot="data")
+    label <- rep(clust.ids[i],dim(clust)[2])
+    # getting common genes
+    common <- intersect(rownames(clust), rownames(oref)) #####
+    # use only differential markers
+    cluster.markers <- FindMarkers(data, ident.1 =clust.ids[i],
+                                   logfc.threshold = 0.25, only.pos = TRUE) #logfc.threshold
+    common <- intersect(common,rownames(cluster.markers))
+    oref.common <- oref[common,]
+    # pred.hpca <- SingleR(test = clust, ref = hpca.se.common, labels = hpca.se$label.main,
+    #                      method="cluster",clusters=label)
+    # new.cluster.ids[i]=pred.hpca$labels
+    tmp <- enricher(rownames(cluster.markers), TERM2GENE = msig.gene.set, TERM2NAME = msig.name)
+    em[[i]]=tmp@result[,c("ID", "p.adjust")] #pvalue/p.adjust
+  }
+  
+  # heatmap of enrichment
+  library(pheatmap)
+  # get top 10 enrichments
+  em.table.top10 = lapply(em,function(x) x[1:10,])
+  # create dataframe for heatmap
+  em.hm = NULL
+  em.hm = data.frame(gene_set=unique(unlist(lapply(em.table.top10,function(x) rownames(x)))))
+  
+  for (i in 1:length(em.hm$gene_set)){
+    for (j in 1:length(clust.ids)){
+      em.hm[i,j+1]=em[[j]]$p.adjust[match(em.hm$gene_set[i],em[[j]]$ID)]
+    }
+  }
+  rownames(em.hm)=em.hm[,1]
+  em.hm=em.hm[,-1]
+  em.hm[is.na(em.hm)]=1
+   colnames(em.hm)=new.cluster.ids
+   colnames(em.hm)=as.character(clust.ids)
+  # 
+   library(viridisLite)
+   col.breaks=seq(-log10(1),min(max(-log10(em.hm))+1,18),by=0.5) #
+   col=inferno(length(col.breaks)) # library(viridis) #
+   col=c("white",colorRampPalette(brewer.pal(n = 7, name ="Reds"))(50)) #
+   pheatmap(-log10(em.hm[,1:length(clust.ids)]),cluster_rows = TRUE,cluster_cols = TRUE, #
+            cellwidth = 10,cellheight = 12,treeheight_row = 0,treeheight_col=0,
+            color = col,scale='none',breaks=col.breaks,fontsize = 8)
+
+}
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$treatment
+subset(K7M2_hsv_even,
+       idents = c("2 - oHSV",
+                  "4 - oHSV+Trabectedin")) %>%
+DGEA(spec = "mouse")
+```
+
+
+# oHSV Analysis
+
+```{r matthelp_hsvgenes, dependson = c("process","umap","downsample")}
+# Find head/prefix ^HSV1 in all genes (rownames) of tumor object
+# Output is a vector of genes beginning with HSV1 that were found in the data:
+
+hsv <- str_subset(row.names(K7M2_hsv_even),
+                  pattern = "^HSV1")
+```
+
+**All oHSV Genes Present:**
+
+```{r hsv_genes, dependson = c("process","umap","downsample","matthelp_hsvgenes")}
+# Create interactive datatable showing hsv genes
+hsv_dt <- as.data.table(hsv)
+DT::datatable(hsv_dt, 
+              rownames = FALSE,
+              extensions = c('FixedColumns',
+                             'Buttons'),
+              options = list(
+                pageLength = 10,
+                scrollX = TRUE,
+                scrollCollapse = TRUE,
+                dom = 'Bfrtip',
+                buttons = c('copy',
+                            'csv',
+                            'excel')
+              ))
+
+```
+
+A closer look at HSV transcript presence in the data.
+
+```{r matthelp_assaydata, dependson = c("process","umap","downsample","matthelp_hsvgenes")}
+#Make a compressed matrix of HSV1 genes as rownames and the corresponding single cell data for each gene (getassaydata is scaled data)
+assay.data <- GetAssayData(K7M2_hsv_even[hsv])
+
+# Rownames of compressed matrix (assay.data) should be the genes from the subset of genes above (hsv <- str_subset)
+#row.names(assay.data)
+
+# Make a numeric vector of the column sums 
+assay_col <- colSums(assay.data)
+
+assay_col_unscaled <- GetAssayData(K7M2_hsv_even[hsv], ) %>%
+  colSums()
+
+(assay_col > 0) %>%
+  summary()
+```
+
+Distribution of HSV1 transcripts:
+
+```{r tibble_hist, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata")}
+
+#Use tibble and ggplot to look at histogram distribution of HSV genes 
+tibble(cell_sum = assay_col) %>%
+  ggplot(aes(cell_sum)) +
+  geom_histogram(bins = 200)
+```
+
+Log normalized distribution of HSV1 transcripts: 
+```{r tibble_hist_log, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata")}
+
+#log scale helps to separate out low expression values and zero. We add 0.000001 to make sure we don't have log(0) (equals infinity so algorithm will remove these values) but can still view all the data points. 
+tibble(cell_sum = assay_col) %>%
+  ggplot(aes(cell_sum + 0.000001)) +
+  geom_histogram(bins = 200) +
+  scale_x_log10()
+```
+
+
+Given that this new analysis better captures viral presence, it is added to the tumor data as metadata. The UMAP distribution of oHSV transcripts is shown. 
+```{r new_hsv_meta, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata")}
+K7M2_hsv_even <- AddMetaData(K7M2_hsv_even,
+                               assay_col,
+                               col.name = "oHSV_abundance")
+
+K7M2_hsv_even <- AddMetaData(K7M2_hsv_even,
+                          assay_col > 0,
+                          col.name = "oHSV_presence")
+
+#Check numbers
+library(data.table)
+K7M2_hsv_even.d <- K7M2_hsv_even@meta.data %>%
+  as.data.table
+
+K7M2_hsv_even.d[, .N, by = c("treatment",
+                             "oHSV_presence")]
+```
+
+
+                      treatment oHSV_presence    N
+1:                  1 - Control         FALSE 3819
+2:                     2 - oHSV          TRUE  859*
+3:                     2 - oHSV         FALSE 2960
+4:              3 - Trabectedin         FALSE 3819
+5:         4 - oHSV+Trabectedin         FALSE 3676
+6:         4 - oHSV+Trabectedin          TRUE  143*
+7: 5 - oHSV+Trabectedin+anti-NK         FALSE 3276
+8: 5 - oHSV+Trabectedin+anti-NK          TRUE  543*
+
+
+```{r hsvhist}
+# Histogram of HSV abundance per treatment group
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$treatment
+for (trtmnt in levels(K7M2_hsv_even)) {
+    ab_hist <- subset(K7M2_hsv_even, idents = trtmnt) %>%
+        feature_hist(features = "oHSV_abundance",
+                     cutoff_table = NULL) +
+      ggtitle("oHSV Abundance",
+              subtitle = paste(trtmnt)) +
+      scale_x_log10()
+    # Print in Rmd
+    print(ab_hist)
+    # Save as pdf
+    pdf(paste0("Plots/K7M2_2/abundancehist_", trtmnt, ".pdf"), height = 5, width = 5)
+    print(ab_hist)
+    dev.off()
+}
+```
+
+### DimPlots: oHSV presence
+
+```{r hsvdimplot, fig.height=5, fig.width=10, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$oHSV_presence
+
+# Change identities from TRUE/FALSE to infected/uninfected 
+K7M2_hsv_even <- RenameIdents(K7M2_hsv_even, 
+                                c("FALSE" = "oHSV-",
+                                  "TRUE" = "oHSV+"))
+# Reorder identity levels for more clear plotting of oHSV+ cells
+K7M2_hsv_even$oHSV_presence <- factor(K7M2_hsv_even$oHSV_presence,
+                                      levels = c("oHSV-",
+                                                 "oHSV+"))
+# Plot 
+DimPlot(K7M2_hsv_even,
+        pt.size = 0.5,
+        order = TRUE,
+        cols = c("#00BFC4", "#F8766D")) +
+  ggtitle("oHSV Transcript Presence") +
+  coord_fixed()
+
+k7m2_hsvpresence <- DimPlot(K7M2_hsv_even,
+                            pt.size = 0.5,
+                            split.by = "treatment",
+                            order = T,
+                            cols = c("#00BFC4", "#F8766D")) +
+  ggtitle("oHSV Transcript Presence") +
+  coord_fixed()
+
+k7m2_hsvpresence
+
+pdf("Plots/K7M2_2/k7m2_hsvpresence.pdf",
+    height = 10, width = 20)
+k7m2_hsvpresence
+dev.off()
+```
+
+### FeaturePlots: oHSV abundance 
+
+```{r featurehsv, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+FeaturePlot(K7M2_hsv_even,
+            features = "oHSV_abundance",
+            order = TRUE) +
+  theme(aspect.ratio = 1)
+```
+
+**Split by treatment group**
+```{r feature_trt_hsv, fig.height = 3, fig.width = 12, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+FeaturePlot(K7M2_hsv_even,
+            split.by="treatment",
+            features = "oHSV_abundance",
+            order = TRUE) +
+  theme(aspect.ratio = 1)
+```
+
+
+**Max Cutoff at 100**
+
+```{r feature_trt_hsv_100, fig.height = 3, fig.width = 12, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+# Max cutoff at 100
+FeaturePlot(K7M2_hsv_even,
+            split.by="treatment",
+            features = "oHSV_abundance",
+            order = TRUE,
+            max.cutoff = 100) +
+  theme(aspect.ratio = 1)
+```
+
+
+**Max Cutoff at 50**
+
+```{r feature_trt_hsv_50, fig.height = 3, fig.width = 12, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+# Max cutoff at 50
+FeaturePlot(K7M2_hsv_even,
+            split.by="treatment",
+            features = "oHSV_abundance",
+            order = TRUE,
+            max.cutoff = 50) +
+  theme(aspect.ratio = 1)
+```
+
+
+**Max Cutoff at 20**
+
+```{r feature_trt_hsv_20, fig.height = 3, fig.width = 12, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+# Max cutoff at 20
+FeaturePlot(K7M2_hsv_even,
+            split.by="treatment",
+            features = "oHSV_abundance",
+            order = TRUE,
+            max.cutoff = 20) +
+  theme(aspect.ratio = 1)
+```
+
+**Max Cutoff at 5**
+
+```{r feature_trt_hsv_5, fig.height = 3, fig.width = 12, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+# Max cutoff at 5
+k7m2_hsv_ab <- FeaturePlot(K7M2_hsv_even,
+                           split.by="treatment",
+                           features = "oHSV_abundance",
+                           order = TRUE,
+                           max.cutoff = 5) +
+  theme(aspect.ratio = 1)
+
+pdf("Plots/K7M2_2/k7m2_hsv_ab.pdf",
+    height = 10, width = 20)
+k7m2_hsv_ab
+dev.off()
+```
+
+### Violin Plots: oHSV abundance
+
+oHSV abundance is shown below across treatment groups, as well as by cluster and treatment groups. 
+
+```{r vlnhsv, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$treatment
+
+VlnPlot(K7M2_hsv_even,
+        features = "oHSV_abundance",
+        split.by = "treatment")
+
+k7m2_ab_vln <- VlnPlot(K7M2_hsv_even,
+                       features = "oHSV_abundance",
+                       split.by = "treatment",
+                       group.by = "seurat_clusters")
+k7m2_ab_vln
+
+pdf("Plots/K7M2_2/k7m2_ab_vln.pdf", height = 5, width = 5)
+k7m2_ab_vln
+dev.off()
+```
+
+```{r hsvab, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$treatment
+
+# Violin plots of HSV abundance
+VlnPlot(K7M2_hsv_even,
+        features = "oHSV_abundance",
+        split.by = "treatment")
+
+obj4vln <- RenameIdents(K7M2_hsv_even,
+                        c("1 - Control" = "1",
+                          "2 - oHSV" = "2",
+                          "3 - Trabectedin" = "3",
+                          "4 - oHSV+Trabectedin" = "4",
+                          "5 - oHSV+Trabectedin+anti-NK" = "5"))
+log_ab <- VlnPlot(obj4vln,
+                  features = "oHSV_abundance",
+                  split.by = "treatment",
+                  log = TRUE) +
+  NoLegend()
+
+log_ab
+# save as pdf
+pdf("Plots/K7M2_2/vln_log_hsvabundance.pdf",
+    height = 5, width = 5)
+print(log_ab)
+dev.off()
+
+pdf("Plots/K7M2_2/vln_log_hsvabundance2.pdf",
+    height = 2, width = 8)
+print(log_ab)
+dev.off()
+
+VlnPlot(K7M2_hsv_even,
+        features = "oHSV_abundance",
+        split.by = "treatment",
+        group.by = "seurat_clusters")
+
+# Histogram of HSV abundance per treatment group
+for (trtmnt in levels(K7M2_hsv_even)) {
+  ab_hist <- subset(K7M2_hsv_even, idents = trtmnt) %>%
+    feature_hist(features = "oHSV_abundance",
+                 cutoff_table = NULL) +
+    ggtitle("oHSV Abundance",
+            subtitle = paste(trtmnt))
+  # Print in Rmd
+  print(ab_hist)
+  # Save as pdf
+  pdf(paste0("Plots/K7M2_2/abundancehist_", trtmnt, ".pdf"),
+      height = 5, width = 5)
+  print(ab_hist)
+  dev.off()
+}
+```
+
+
+### Numbers of oHSV+ per treatment group
+```{r numbers, dependson= c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+## extract meta data for group numbers
+library(data.table)
+K7M2_hsv_even_dt <- K7M2_hsv_even@meta.data %>% 
+  as.data.table
+# the resulting md object has one "row" per cell
+K7M2_hsv_even_dt[,
+                 .N, 
+                 by = c("treatment", 
+                        "oHSV_presence")]
+
+	 
+```
+
+### HSV Time Point Module Scores 
+
+Look at immediate early, early, and late gene expression and add to the data as a module score. Below the baseline plot,
+cutoffs are used to better visualize the spread of oHSV transcripts for each stage of gene expression. Ensuring that the expression patterns 
+are not exactly the same supports that presence of oHSV transcripts is not due to random spread during 10x sample preparation. 
+
+Immediate early: "HSV1-RL2",
+                 "HSV1-RS1",
+                 "HSV1-UL54",
+                 "HSV1-US1",
+                 "HSV1-US12"
+
+Early: "HSV1-UL23",
+       "HSV1-UL29",
+       "HSV1-UL50",
+       "HSV1-UL2"
+
+Late: "HSV1-UL48",
+      "HSV1-UL19",
+      "HSV1-US6" (note: not present in our data), 
+      "HSV1-UL27",
+      "HSV1-UL53",
+      "HSV1-UL44",
+      "HSV1-UL41"
+
+
+```{r hsv_timepoints, fig.height = 4, fig.width = 16, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+# Create lists of time points for HSV gene expression 
+imm_early <- list(c("HSV1-RL2",
+               "HSV1-RS1",
+               "HSV1-UL54",
+               "HSV1-US1",
+               "HSV1-US12"))
+
+early <- list(c("HSV1-UL23",
+           "HSV1-UL29",
+           "HSV1-UL50",
+           "HSV1-UL2"))
+
+late <- list(c("HSV1-UL48",
+          "HSV1-UL19",
+          "HSV1-US6",
+          "HSV1-UL27",
+          "HSV1-UL53",
+          "HSV1-UL44",
+          "HSV1-UL41"))
+
+# Add HSV timepoint module scores 
+timepoints <- c("Immediate_Early_Genes",
+                    "Early_Genes",
+                    "Late_Genes")
+
+hsv_timepoints <- c(imm_early,
+                     early,
+                     late)
+
+names(hsv_timepoints) <- timepoints
+
+for (hsv_time in names(hsv_timepoints)) {
+# Add timepoint data as module score
+K7M2_hsv_even <- AddModuleScore(K7M2_hsv_even,
+                                features = list(hsv_timepoints[[hsv_time]]),
+                                ctrl = 5,
+                                name = hsv_time)
+
+# Rename AddModuleScore naming syntax
+colnames(K7M2_hsv_even@meta.data)[which(names(K7M2_hsv_even@meta.data) == paste0(hsv_time, "1"))] <- hsv_time
+
+# Create FeaturePlots based on the timepoint module scores
+hsv_timepoints[["plots"]][[paste0(hsv_time, "_plot")]] <- FeaturePlot(K7M2_hsv_even,
+                                                          features = hsv_time,
+                                                          split.by = "treatment",
+                                                          order = TRUE,
+                                                          min.cutoff = 0) +
+                                              theme(aspect.ratio = 1)
+
+print(hsv_timepoints[["plots"]][[paste0(hsv_time, "_plot")]])
+
+# Create FeaturePlots based on the timepoint module scores
+hsv_timepoints[["plots"]][[paste0(hsv_time, "_plot_cutoff15")]] <- FeaturePlot(K7M2_hsv_even,
+                                                          features = hsv_time,
+                                                          split.by = "treatment",
+                                                          order = TRUE,
+                                                          max.cutoff = 15,
+                                                          min.cutoff = 0) +
+                                              theme(aspect.ratio = 1)
+
+hsv_timepoints[["plots"]][[paste0(hsv_time, "_plot_cutoff1")]] <- FeaturePlot(K7M2_hsv_even,
+                                                          features = hsv_time,
+                                                          split.by = "treatment",
+                                                          order = TRUE,
+                                                          max.cutoff = 1,
+                                                          min.cutoff = 0) +
+                                              theme(aspect.ratio = 1)
+}
+
+save(K7M2_hsv_even, file = "Data/K7M2_hsv_even-labeled.RData")
+```
+
+```{r hsv_patchwork_cutoff15, fig.height = 12, fig.width = 16, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta","hsv_timepoints")}
+library(patchwork)
+
+hsv_patchwork_hi <- (hsv_timepoints[["plots"]][["Immediate_Early_Genes_plot_cutoff15"]] / 
+                  hsv_timepoints[["plots"]][["Early_Genes_plot_cutoff15"]] / 
+                  hsv_timepoints[["plots"]][["Late_Genes_plot_cutoff15"]]) + 
+  plot_annotation(title = 'Max Cutoff of 15',
+                  theme = theme(plot.title = element_text(size = 18)))
+
+hsv_patchwork_hi
+
+```
+
+```{r hsv_patchwork_cutoff1, fig.height = 12, fig.width = 16, dependson = c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta","hsv_timepoints")}
+library(patchwork)
+
+hsv_patchwork_lo <- (hsv_timepoints[["plots"]][["Immediate_Early_Genes_plot_cutoff1"]] / 
+                  hsv_timepoints[["plots"]][["Early_Genes_plot_cutoff1"]] / 
+                  hsv_timepoints[["plots"]][["Late_Genes_plot_cutoff1"]]) + 
+  plot_annotation(title = 'Max Cutoff of 1',
+                  theme = theme(plot.title = element_text(size = 18)))
+
+hsv_patchwork_lo
+
+```
+
+# Antiviral Analysis
+
+## Differential Gene Expression
+
+Differential gene expression in combination compared to oHSV alone (gene list shown in the table below). GO and KEGG analyses are performed.
+
+```{r deg-trt}
+trtdiff <- FindMarkers(K7M2_hsv_even,
+                       ident.1 = "4 - oHSV+Trabectedin",
+                       ident.2 = "2 - oHSV",
+                       logfc.threshold = 0.15,
+                       only.pos = F) %>%
+  arrange(-abs(avg_log2FC))
+
+trtdiff <- as.data.frame(trtdiff)
+trtdiff <- arrange(trtdiff, desc(avg_log2FC))
+degs <- as.vector(trtdiff$avg_log2FC)
+names(degs) <- rownames(trtdiff) %>%
+  str_replace("HSV1-","")
+degs
+
+trt <- list()
+trt[["GO-BP"]] <- clusterProfiler::gseGO(
+  geneList = degs,
+  OrgDb = org.Mm.eg.db::org.Mm.eg.db,
+  ont = "ALL",
+  keyType = "SYMBOL",
+  nPermSimple = 10000,
+  eps = 0)
+
+trt[["GO-BP"]] <- mutate(trt[["GO-BP"]],
+      p.adjust = -log10(p.adjust))
+
+plots <- list()
+if (nrow(trt[["GO-BP"]]) > 0) {
+  plots[["GO-BP"]] <- enrichplot::dotplot(trt[["GO-BP"]],
+                                          x = "NES",
+                                          showCategory = 15,
+                                          font.size = 8,
+                                          label_format = 40) +
+    labs(title = "Upregulated Gene Sets in K7M2 treated with Combination Therapy",
+         subtitle = "GO-BP Gene Sets")
+} else {
+  plots[["GO-BP"]] <-
+    ggplot(tibble(x = "A", y = "A",
+                  text = "No significant hits"),
+           aes(x = x, y = y, label = text)) +
+    geom_text() +
+    theme(axis.text = element_text(size = 5)) +
+    labs(title = "Upregulated Gene Sets in K7M2 treated with Combination Therapy",
+         subtitle = "GO-BP Gene Sets")
+}
+
+plots[["GO-BP"]]
+```
+
+```{r kegg, dependson='deg-trt', eval = F}
+hs <- org.Mm.eg.db
+rownames(trtdiff) <- rownames(trtdiff) %>%
+  str_replace("HSV1-","")
+trtdiff <- select(hs,
+                  keys = rownames(trtdiff),
+                  columns = c("ENTREZID", "SYMBOL"),
+                  keytype = "SYMBOL") %>%
+  na.omit()
+
+## Test from Yogesh
+conversion <-
+  clusterProfiler::bitr(geneID = names(degs),
+                        fromType = "SYMBOL",
+                        toType = "ENTREZID",
+                        OrgDb = "org.Mm.eg.db")
+
+conversion <-
+  clusterProfiler::bitr(geneID = names(degs),
+                        fromType = "SYMBOL",
+                        toType = "ENTREZID",
+                        OrgDb = "org.Mm.eg.db")
+
+keggdegs <-
+  as.data.frame(degs) %>%
+  rownames_to_column("SYMBOL") %>%
+  inner_join(conversion, by = "SYMBOL") %>%
+  pull(degs, name = ENTREZID)
+
+subsetted_list <- list()
+gsea_KEGG <- list()
+for (ids in unique(entrezgene_id$cluster)) {
+  temp_df <- dplyr::filter(entrezgene_id, treatment == ids)
+  subsetted_list[[ids]] <- temp_df$avg_log2FC
+  names(subsetted_list[[ids]]) <- temp_df$ENTREZID
+  
+  
+  gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
+                                        organism = "mmu")
+}
+
+##
+# trt[["KEGG"]] <- clusterProfiler::enrichKEGG(
+#   gene = degs,
+#   organism = "hsa",
+#   keyType = "ncbi-geneid")
+# 
+# trt[["KEGG"]] <- clusterProfiler::gseKEGG(geneList = degs,
+#                                           organism = 'hsa')
+
+gsea_KEGG[[ids]] <- mutate(gsea_KEGG[[ids]],
+                           p.adjust = -log10(p.adjust))
+
+#plots <- list()
+if (nrow(gsea_KEGG[[ids]]) > 0) {
+  plots[["KEGG"]] <- enrichplot::dotplot(trt[["KEGG"]],
+                                         x = "NES",
+                                         showCategory = 15,
+                                         font.size = 8) +
+    labs(title = "Upregulated Pathways in Combination Therapy",
+         subtitle = "KEGG Gene Sets")
+} else {
+  plots[["KEGG"]] <-
+    ggplot(tibble(x = "A", y = "A",
+                  text = "No significant hits"),
+           aes(x = x, y = y, label = text)) +
+    geom_text() +
+    theme(axis.text = element_text(size = 5)) +
+    labs(title = "Upregulated Pathways in Combination Therapy",
+         subtitle = "KEGG Gene Sets")
+}
+
+plots[["KEGG"]]
+```
+
+
+```{r, eval = F}
+antiviral <- c("NKAIN1",
+               "AL031289.1",
+               "EIF2S2P5",
+               "HMGN3P1",
+               "RGS18",
+               "AC244034.2",
+               "FAM89A",
+               "RSAD2",
+               "AC079148.1",
+               "DNAJA1P2",
+               "AC010980.2",
+               "FAM212A",
+               "AC097358.2",
+               "RCC2P4",
+               "ACKR4",
+               "PTX3",
+               "AC026355.3",
+               "P3H2",
+               "RHOH",
+               "CXCL6",
+               "CXCL3",
+               "PMPCAP1",
+               "COX7A2P2",
+               "SLC39A8",
+               "PITX2",
+               "FGF2",
+               "GUCY1A3",
+               "KCTD9P5",
+               "AC008972.2",
+               "DBIP2",
+               "MIR3142HG",
+               "PPP1R10",
+               "RN7SL273P",
+               "RCC2P7",
+               "PRDM13",
+               "RSPO3",
+               "MAP7",
+               "SOD2",
+               "GSAP",
+               "AC092849.2",
+               "NAMPT",
+               "CCDC71L",
+               "LRRN3",
+               "AC004941.2",
+               "BX119904.1",
+               "CYP7B1",
+               "AC087752.2",
+               "HAS2",
+               "TIGD5",
+               "SNRPEP2",
+               "TNFSF15",
+               "AL450263.2",
+               "AP000907.2",
+               "B3GAT1",
+               "ZSWIM8-AS1",
+               "PLAU",
+               "STAMBPL1",
+               "IFIT3",
+               "HPS6",
+               "AC089998.3",
+               "OAS1",
+               "OAS2",
+               "OASL",
+               "RXFP2",
+               "AL355102.4",
+               "AC022872.1",
+               "PHBP21",
+               "AC009054.1",
+               "LINC02181",
+               "RN7SL775P",
+               "CSF3",
+               "NR1D1",
+               "RARA",
+               "C17orf113",
+               "SLC16A6",
+               "AL132822.1",
+               "AC010323.1",
+               "INSL3",
+               "AF038458.2",
+               "TMEM150B",
+               "ZNF583",
+               "APOL3",
+               "MX2")
+
+```
+
+
+```{r}
+sessionInfo()
+```
+
