@@ -33,6 +33,17 @@ library(patchwork)
 source("scSeurat-addhsv.R")
 # Set the random generator seed so that results are reproducible.
 set.seed(888)
+
+# Create files for saving if do not exist
+if(!file.exists("Data")){
+  dir.create("Data")
+}
+if(!file.exists("Plots")){
+  dir.create("Plots")
+}
+if(!file.exists("Plots/A673_1")){
+  dir.create("Plots/A673_1")
+}
 ```
 
 ## Tumor Samples - Human
@@ -440,7 +451,7 @@ ohsvpresence <- DimPlot(A673_hsv_even,
   coord_fixed()
 ohsvpresence
 
-pdf("ohsv_presence_dimplot.pdf",
+pdf("Plots/A673_1/ohsv_presence_dimplot.pdf",
     height = 5, width = 10)
 ohsvpresence
 dev.off()
@@ -528,12 +539,12 @@ log_ab <- VlnPlot(obj4vln,
 
 log_ab
 # save as pdf
-pdf("vln_log_hsvabundance.pdf",
+pdf("Plots/A673_1/vln_log_hsvabundance.pdf",
     height = 5, width = 5)
 print(log_ab)
 dev.off()
 
-pdf("vln_log_hsvabundance2.pdf",
+pdf("Plots/A673_1/vln_log_hsvabundance2.pdf",
     height = 2, width = 8)
 print(log_ab)
 dev.off()
@@ -553,7 +564,7 @@ for (trtmnt in levels(A673_hsv_even)) {
   # Print in Rmd
   print(ab_hist)
   # Save as pdf
-  pdf(paste0("abundancehist_", trtmnt, ".pdf"),
+  pdf(paste0("Plots/A673_1/abundancehist_", trtmnt, ".pdf"),
       height = 5, width = 5)
   print(ab_hist)
   dev.off()
@@ -670,7 +681,7 @@ for (hsv_time in names(hsv_timepoints)) {
   
   print(plots[[paste0(hsv_time, "rfeatureplot_plot_cutoff1")]])
   
-  pdf(paste0("rfeaturecutoff1_", hsv_time, trtmnt),
+  pdf(paste0("Plots/A673_1/rfeaturecutoff1_", hsv_time, trtmnt),
       height = 5, width = 10)
   print(plots[[paste0(hsv_time, "rfeatureplot_plot_cutoff1")]])
   dev.off()
@@ -762,7 +773,7 @@ for (trtmnt in c("2 - oHSV", "4 - oHSV+Trabectedin")) {
     # Print in Rmd
     print(plots[[paste0(hsv_time, "_hist")]][[trtmnt]])
     # Save as pdf
-    pdf(paste0("hist_", hsv_time, "_", trtmnt, ".pdf"),
+    pdf(paste0("Plots/A673_1/hist_", hsv_time, "_", trtmnt, ".pdf"),
         height = 5, width = 5)
     print(plots[[paste0(hsv_time, "_hist")]][[trtmnt]])
     dev.off()
@@ -787,7 +798,7 @@ for (hsv_time in names(hsv_timepoints)) {
                      sort = T)
   print(ridge)
   
-  pdf(paste0("ridge", hsv_time, ".pdf"),
+  pdf(paste0("Plots/A673_1/ridge", hsv_time, ".pdf"),
       height = 5, width = 10)
   print(ridge)
   dev.off()
@@ -814,7 +825,7 @@ for (trtmnt in c("2 - oHSV", "4 - oHSV+Trabectedin")) {
     NoLegend()
   print(ridge)
   
-  pdf(paste0("ridge_p2", hsv_time, trtmnt, ".pdf"),
+  pdf(paste0("Plots/A673_1/ridge_p2", hsv_time, trtmnt, ".pdf"),
       height = 5, width = 10)
   print(ridge)
   dev.off()
@@ -861,7 +872,7 @@ feature <- subset(A673_hsv_even,
   theme(aspect.ratio = 1)
 
 print(feature)
-pdf("featureplot_time.pdf", height = 12.5, width = 8.25)
+pdf("Plots/A673_1/featureplot_time.pdf", height = 12.5, width = 8.25)
 print(feature)
 dev.off()
 
@@ -876,7 +887,7 @@ vln <- subset(A673_hsv_even,
   NoLegend()
 print(vln)
 
-pdf("vlnplot_time.pdf", height = 12.5, width = 8.25)
+pdf("Plots/A673_1/vlnplot_time.pdf", height = 12.5, width = 8.25)
 print(feature)
 dev.off()
 ```
