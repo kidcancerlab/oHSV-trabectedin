@@ -414,7 +414,7 @@ K7M2_hsv_even <-
                "Erythrocytes" = "Tumor cells",
                "Adipocytes" = "Tumor cells",
                "Fibroblasts" = "Tumor cells") %>%
-  StashIdent(save.name = "cell_identities")
+  StashIdent(save.name = "SingleR2ed")
 
 k7m2_ids <- DimPlot(K7M2_hsv_even,
                     reduction = "umap",
@@ -430,21 +430,233 @@ k7m2_ids
 dev.off()
 ```
 
-```{r cell_subset, warnings = TRUE}
+```{r clust_ids}
+# Name clusters using cell ids from singlr
+Idents(K7M2_hsv_even) <- K7M2_hsv_even$RNA_snn_res.0.2
+DimPlot(K7M2_hsv_even)
+
+clust_ids <- list()
+clust_ids[["tumor"]] <- c('0','2','4')
+clust_ids[["nkt"]] <- c('3','5','7')
+clust_ids[["myeloid"]] <- '1'
+clust_ids[["stromal_endo"]] <- '6'
+clust_ids[["dc_b"]] <- '10'
+
+# Load the mouse reference library & immune-specific mouse data
+ref1 <- MouseRNAseqData()
+ref2 <- ImmGenData()
+
+for (clust in names(clust_ids)) {
+  sobj <- subset(K7M2_hsv_even,
+                 idents = clust_ids[[clust]]) %>%
+    FindNeighbors(dims = 1:17) %>%
+    FindClusters(dims = 1:17,
+                 res = 0.2) %>%
+    RunUMAP(dims = 1:17)
+  
+  print(DimPlot(sobj,
+                label = T,
+                repel = T) +
+          ggtitle(clust))
+
+  FindAllMarkers(sobj,
+                 min.pct = 0.25,
+                 logfc.threshold = 0.25,
+                 only.pos = T) %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) %>%
+    write.csv(file = paste0("Plots/K7M2_2/",
+                            clust,
+                            ".csv"))
+
+  # Convert the Seurat object to a SCE object
+  sobj_sce <- as.SingleCellExperiment(sobj)
+  # Make cell type predictions using SingleR
+  Tumor_hsv_pred_types <- SingleR(test = sobj_sce,
+                                  ref = list(ref1,
+                                             ref2),
+                                  labels = list(ref1$label.main,
+                                                ref2$label.main))
+  # Transfer labels back to the Seurat object and plot
+  sobj$singleR2 <- Tumor_hsv_pred_types$labels
+  Idents(sobj) <- sobj$singleR2
+  print(DimPlot(sobj,
+                reduction = "umap",
+                pt.size = 0.5,
+                label = T,
+                repel = T) +
+          coord_fixed() +
+          ggtitle(paste("Mouse Reference Labels for", clust))
+        )
+
+  assign(clust,
+         sobj)
+}
+Idents(nkt) <- nkt$RNA_snn_res.0.2
+nkt <- 
+  RenameIdents(nkt,
+               "0" = "NK",
+               "1" = "CD4",
+               "2" = "CD8",
+               "3" = "Prolif NK+CD8",
+               "4" = "NK") %>%
+  StashIdent(save.name = "cell_identities")
+
+
+Idents(nkt) <- nkt$cell_identities 
+for (cell_id in levels(nkt)) {
+  cell_type <- subset(nkt,
+                      idents = cell_id)
+  Idents(cell_type) <- cell_type$treatment
+  print(table(cell_type$treatment))
+  # set seed
+  cell_type <- subset(cell_type,
+                      downsample = table(cell_type$treatment) %>%
+                        min())
+  print(paste("Downsampled", cell_id))
+  print(table(cell_type$treatment))
+  if (min(table(cell_type$treatment)) > 25) {
+    assign(cell_id, cell_type)
+    Idents(cell_type) <- cell_type$treatment
+    trtdiff <- FindMarkers(cell_type,
+                           ident.1 = "4 - oHSV+Trabectedin",
+                           ident.2 = "2 - oHSV",
+                           logfc.threshold = 0.15,
+                           only.pos = F) %>%
+      arrange(-abs(avg_log2FC))
+    print(head(trtdiff, n=15))
+    
+    pdf(paste0("Plots/K7M2_2/",
+               cell_id,
+               "_topdegs.pdf"),
+        height = 15,
+        width = 15)
+    # or try ggsave?
+    print(VlnPlot(cell_type,
+                  features = head(rownames(trtdiff)),
+                  group.by = "treatment"))
+    dev.off()
+  } else {
+    message("Insufficent cell number for ", cell_id)
+  }
+}
+K7M2_hsv_even <- 
+  RenameIdents(K7M2_hsv_even,
+               "0" = "Tumor cells",
+               "1" = "Monocytes/Macrophages",
+               "2" = "Tumor cells",
+               "3" = "NK or T cells",
+               "4" = "Tumor cells",
+               "5" = "T cells?",
+               "6" = "Stromal/Endothelial cells",
+               "7" = "NK cells?",
+               "8" = "Neutrophils",
+               "9" = "Mast cells?",
+               "10" = "DC or B cells") %>%
+  StashIdent(save.name = "cell_identities")
+
+
+cell_type <- subset(myeloid,
+                    downsample = table(myeloid$treatment) %>%
+                      min())
+print(paste("Downsampled", cell_id))
+print(table(myeloid$treatment))
+  if (min(table(myeloid$treatment)) > 25) {
+    Idents(myeloid) <- myeloid$treatment
+    trtdiff <- FindMarkers(myeloid,
+                           ident.1 = "4 - oHSV+Trabectedin",
+                           ident.2 = "2 - oHSV",
+                           logfc.threshold = 0.15,
+                           only.pos = F) %>%
+      arrange(-abs(avg_log2FC))
+    print(head(trtdiff, n=15))
+}
+```
+
+
+# Subset Cell ID Analysis
+
+```{r cell_subset, message = TRUE}
 Idents(K7M2_hsv_even) <- K7M2_hsv_even$cell_identities 
 for (cell_id in levels(K7M2_hsv_even)) {
   cell_type <- subset(K7M2_hsv_even,
                       idents = cell_id)
-  Idents(cell_type) <- cell_type$treatment
-  cell_type <- subset(cell_type,
-                      downsample = table(cell_type$treatment) %>%
+  Idents(myeloid) <- myeloid$treatment
+  print(table(myeloid$treatment))
+  cell_type <- subset(myeloid,
+                      downsample = table(myeloid$treatment) %>%
                         min())
-  print(cell_id)
+  #print(paste("Downsampled", cell_id))
   print(table(cell_type$treatment))
   if (min(table(cell_type$treatment)) > 50) {
     assign(cell_id, cell_type)
+    Idents(cell_type) <- cell_type$treatment
+    trtdiff <- FindMarkers(cell_type,
+                           ident.1 = "4 - oHSV+Trabectedin",
+                           ident.2 = "2 - oHSV",
+                           logfc.threshold = 0.15,
+                           only.pos = F) %>%
+      arrange(-abs(avg_log2FC))
+    print(head(trtdiff, n=20))
+    
+    pdf(paste0("Plots/K7M2_2/",
+               cell_id,
+               "_topdegs.pdf"),
+        height = 15,
+        width = 15)
+    print(VlnPlot(cell_type,
+                  features = head(rownames(trtdiff)),
+                  group.by = "treatment"))
+    dev.off()
+    
+    trtdiff <- as.data.frame(trtdiff)
+    trtdiff <- arrange(trtdiff, desc(avg_log2FC))
+    degs <- as.vector(trtdiff$avg_log2FC)
+    names(degs) <- rownames(trtdiff) %>%
+      str_replace("HSV1-","")
+    
+    conversion <-
+      clusterProfiler::bitr(geneID = names(degs),
+                            fromType = "SYMBOL",
+                            toType = "ENTREZID",
+                            OrgDb = "org.Mm.eg.db")
+    
+    keggdegs <-
+      as.data.frame(degs) %>%
+      rownames_to_column("SYMBOL") %>%
+      inner_join(conversion, by = "SYMBOL") %>%
+      pull(degs, name = ENTREZID)
+    
+    gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
+                                          organism = "hsa",
+                                          eps = 0)
+    gsea_KEGG <- mutate(gsea_KEGG,
+                        p.adjust = -log10(p.adjust))
+    plots <- list()
+    if (nrow(gsea_KEGG) > 0) {
+      plots[["KEGG"]][[cell_id]] <- enrichplot::dotplot(gsea_KEGG,
+                                             x = "NES",
+                                             showCategory = 25,
+                                             font.size = 8,
+                                             color = "NES") +
+        labs(title = "Enrichment of Pathways in Combination Therapy",
+             subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
+    } else {
+      plots[["KEGG"]][[cell_id]] <-
+        ggplot(tibble(x = "A", y = "A",
+                      text = "No significant hits"),
+               aes(x = x, y = y, label = text)) +
+        geom_text() +
+        theme(axis.text = element_text(size = 5)) +
+        labs(title = "Enrichment of Pathways in Combination Therapy",
+             subtitle = paste("KEGG Gene Sets from", cell_id, "in K7M2"))
+    }
+    
+    print(plots[["KEGG"]][[cell_id]])
+    
+    
   } else {
-    print("Insufficent cell number for ", cell_id)
+    message("Insufficent cell number for ", cell_id)
   }
 }
 
@@ -1040,9 +1252,7 @@ for (trtmnt in levels(K7M2_hsv_even)) {
             subtitle = paste(trtmnt))
   # Print in Rmd
   print(ab_hist)
-  # Save as pdf
-  pdf(paste0("Plots/K7M2_2/abundancehist_", trtmnt, ".pdf"),
-      height = 5, width = 5)
+  # Save as pdf      height = 5, width = 5)
   print(ab_hist)
   dev.off()
 }
@@ -1245,23 +1455,7 @@ if (nrow(trt[["GO-BP"]]) > 0) {
 plots[["GO-BP"]]
 ```
 
-```{r kegg, dependson='deg-trt', eval = F}
-hs <- org.Mm.eg.db
-rownames(trtdiff) <- rownames(trtdiff) %>%
-  str_replace("HSV1-","")
-trtdiff <- select(hs,
-                  keys = rownames(trtdiff),
-                  columns = c("ENTREZID", "SYMBOL"),
-                  keytype = "SYMBOL") %>%
-  na.omit()
-
-## Test from Yogesh
-conversion <-
-  clusterProfiler::bitr(geneID = names(degs),
-                        fromType = "SYMBOL",
-                        toType = "ENTREZID",
-                        OrgDb = "org.Mm.eg.db")
-
+```{r kegg, dependson='deg-trt'}
 conversion <-
   clusterProfiler::bitr(geneID = names(degs),
                         fromType = "SYMBOL",
@@ -1274,38 +1468,19 @@ keggdegs <-
   inner_join(conversion, by = "SYMBOL") %>%
   pull(degs, name = ENTREZID)
 
-subsetted_list <- list()
-gsea_KEGG <- list()
-for (ids in unique(entrezgene_id$cluster)) {
-  temp_df <- dplyr::filter(entrezgene_id, treatment == ids)
-  subsetted_list[[ids]] <- temp_df$avg_log2FC
-  names(subsetted_list[[ids]]) <- temp_df$ENTREZID
-  
-  
-  gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
-                                        organism = "mmu")
-}
-
-##
-# trt[["KEGG"]] <- clusterProfiler::enrichKEGG(
-#   gene = degs,
-#   organism = "hsa",
-#   keyType = "ncbi-geneid")
-# 
-# trt[["KEGG"]] <- clusterProfiler::gseKEGG(geneList = degs,
-#                                           organism = 'hsa')
-
-gsea_KEGG[[ids]] <- mutate(gsea_KEGG[[ids]],
+gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
+                                      organism = "mmu",
+                                      eps = 0)
+gsea_KEGG <- mutate(gsea_KEGG,
                            p.adjust = -log10(p.adjust))
-
-#plots <- list()
-if (nrow(gsea_KEGG[[ids]]) > 0) {
-  plots[["KEGG"]] <- enrichplot::dotplot(trt[["KEGG"]],
+plots <- list()
+if (nrow(gsea_KEGG) > 0) {
+  plots[["KEGG"]] <- enrichplot::dotplot(gsea_KEGG,
                                          x = "NES",
-                                         showCategory = 15,
+                                         showCategory = 30,
                                          font.size = 8) +
-    labs(title = "Upregulated Pathways in Combination Therapy",
-         subtitle = "KEGG Gene Sets")
+    labs(title = "Enrichment of Pathways in Combination Therapy",
+         subtitle = "KEGG Gene Sets from K2M2")
 } else {
   plots[["KEGG"]] <-
     ggplot(tibble(x = "A", y = "A",
@@ -1313,11 +1488,17 @@ if (nrow(gsea_KEGG[[ids]]) > 0) {
            aes(x = x, y = y, label = text)) +
     geom_text() +
     theme(axis.text = element_text(size = 5)) +
-    labs(title = "Upregulated Pathways in Combination Therapy",
-         subtitle = "KEGG Gene Sets")
+    labs(title = "Enrichment of Pathways in Combination Therapy",
+         subtitle = "KEGG Gene Sets from K7M2")
 }
 
 plots[["KEGG"]]
+
+# Map onto pathway
+# gene <- names(keggdegs)[abs(keggdegs) > 0.25]
+# gsea_enKEGG <- clusterProfiler::enrichKEGG(gene,
+#                                            organism = "hsa")
+# clusterProfiler::browseKEGG(gsea_enKEGG, 'hsa05168')
 ```
 
 
