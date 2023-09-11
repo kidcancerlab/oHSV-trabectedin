@@ -505,7 +505,7 @@ FeaturePlot(A673_hsv_even,
 **Max Cutoff at 20**
 
 ```{r feature_trt_hsv_20, fig.height = 3, fig.width = 12, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
-# Max cutoff at 50
+# Max cutoff at 20
 FeaturePlot(A673_hsv_even,
             split.by="treatment",
             features = "oHSV_abundance",
