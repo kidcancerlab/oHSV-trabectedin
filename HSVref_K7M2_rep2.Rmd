@@ -646,9 +646,9 @@ VlnPlot(krecurlustered,
         log = T)
 ```
 
-### Tumor subset
+### Subsetting
 
-```{r anysubset}
+```{r anysubset,eval=F}
 Idents(krecurlustered) <- krecurlustered$clust_2
 # subset cells
 tumor <- subset(krecurlustered,
@@ -665,18 +665,19 @@ subsets <- list(Tumor = tumor,
 for (celltype in names(subsets)) {
   # Set seed before random downsampling
   set.seed(132)
-  
+  # create table of cell type # per treatment group
+  Idents(subsets[[celltype]]) <- subsets[[celltype]]$treatment
+  print(celltype)
+  print(table(subsets[[celltype]]$treatment))
   # Subset the highest number that makes all treatment groups equal in cell number
   type <-
     subset(subsets[[celltype]],
            downsample = table(subsets[[celltype]]$treatment) %>%
              min())
-  
   ## Check that worked: cell numbers across treatments should be equal
-  table(type$treatment)
-  # Label cells by treatment group
-  Idents(type) <- type$clust_2
-  
+  print(paste("Downsampled",
+              celltype))
+  print(table(type$treatment))
   ## Plot
   print(
     DimPlot(type,
@@ -698,42 +699,180 @@ for (celltype in names(subsets)) {
 Idents(krecurlustered) <- krecurlustered$clust_2
 #krecurlustered <- RenameIdents(krecurlustered,
 krecurlustered$cell_ids <-
-  str_replace_all(krecurlustered$clust_3, c(
-    "clust_00." = "Tumor cells",
-    "clust_01." = "Tumor cells",
-    "clust_02." = "Tumor cells",
-    "clust_03." = "Tumor cells",
-    "clust_11." = "DC",
-    "clust_12." = "DC",
-    "clust_23." = "NK cells",
-    "clust_20." = "NK cells",
-    "clust_22." = "CD8 T cells",
-    "clust_24." = "Prolif NK and T cells",
-    "clust_21." = "NK and CD8 T cells",
-    "clust_25." = "Tregs",
-    "clust_26." = "CD4 T cells",
-    "clust_31." = "Endothelial cells",
-    "clust_30." = "Fibroblasts",
-    "clust_51." = "Neutrophils",
-    "clust_50." = "Neutrophils",
-    "clust_40." = "Mast cells",
-    "clust_41." = "Mast cells",
-    "clust_100" = "Monocytes",
-    "clust_101" = "Monocytes",
-    "clust_102" = "Macrophages"
-  )) 
+  str_replace_all(krecurlustered$clust_3,
+                  c(
+                    "clust_00." = "Tumor cells",
+                    "clust_01." = "Tumor cells",
+                    "clust_02." = "Tumor cells",
+                    "clust_03." = "Tumor cells",
+                    "clust_11." = "DC",
+                    "clust_12." = "DC",
+                    "clust_23." = "NK cells",
+                    "clust_20." = "NK cells",
+                    "clust_22." = "CD8 T cells",
+                    "clust_24." = "Prolif NK and T cells",
+                    "clust_21." = "Activated NK and CD8 T cells",
+                    "clust_25." = "Tregs",
+                    "clust_26." = "CD4 T cells",
+                    "clust_31." = "Endothelial cells",
+                    "clust_30." = "Fibroblasts",
+                    "clust_51." = "Neutrophils",
+                    "clust_50." = "Neutrophils",
+                    "clust_40." = "Mast cells",
+                    "clust_41." = "Mast cells",
+                    "clust_100" = "Monocytes",
+                    "clust_101" = "Monocytes",
+                    "clust_102" = "Macrophages"
+                  )) 
 
 #%>%
 #  StashIdent(save.name = "cell_ids")
 #str_replace_all()
-DimPlot(krecurlustered,
-        split.by = "treatment",
-        group.by = "cell_ids")
+labeled_dim <- r_dim_plot(krecurlustered,
+                          group.by = "cell_ids",
+                          label = T,
+                          shuffle = T) +
+  coord_fixed()
+
+pdf(file = "Plots/K7M2_2/krecurl_cell_ids_dim",
+    height = 10,
+    width = 10)
+labeled_dim
+dev.off()
+
+r_dim_plot(krecurlustered,
+           split.by = "treatment",
+           group.by = "cell_ids") +
+  coord_fixed()
+```
+
+```{r anysubset2}
+# set idents 
+Idents(krecurlustered) <- krecurlustered$cell_ids
+# subset cells
+tumor <- subset(krecurlustered,
+                idents = "Tumor cells")
+nk_t <- subset(krecurlustered,
+               idents = c("NK cells",
+                          "CD8 T cells",
+                          "Prolif NK and T cells",
+                          "Activated NK and CD8 T cells",
+                          "Tregs",
+                          "CD4 T cells"))
+myeloid <- subset(krecurlustered,
+              idents = c("DC",
+                         "Monocytes",
+                         "Macrophages"))
+
+subsets <- list(Tumor = tumor,
+                NK_T = nk_t,
+                Myeloid = myeloid)
+
+for (celltype in names(subsets)) {
+  # Set seed before random downsampling
+  set.seed(132)
+  # Print out the identifying cell label
+  print(celltype)
+  # show relative numbers of cell ids per treatment in each subset
+  table(subsets[[celltype]]@meta.data[["cell_ids"]],
+        subsets[[celltype]]@meta.data[["treatment"]]) %>%
+    print()
+  # Prepare for downsampling
+  Idents(subsets[[celltype]]) <- subsets[[celltype]]$treatment
+  # Display overall cell count prior to downsampling
+  table(subsets[[celltype]]$treatment) %>%
+    print()
+  # Subset the highest number that makes all treatment groups equal in cell number
+  type <-
+    subset(subsets[[celltype]],
+           downsample = table(subsets[[celltype]]$treatment) %>%
+             min())
+  ## Check that worked: cell numbers across treatments should be equal
+  print(paste("Downsampled",
+              celltype))
+  print(table(type$treatment))
+  # Assign to an object
+  assign(paste0(celltype,
+                "_downsampled"),
+         type)
+  ## Plot
+  print(
+    DimPlot(type,
+            split.by = "treatment")) +
+    ggtitle(paste(celltype, "Cells"))
+}
 ```
 
 ### Analyze T and NK Cytotoxicity Expression
 
-```{r fig.height = 11,fig.width=9}
+```{r nktsubsets}
+# set idents 
+Idents(krecurlustered) <- krecurlustered$cell_ids
+# subset cells
+nk <- subset(krecurlustered,
+             idents = "NK cells")
+cd8t <- subset(krecurlustered,
+               idents = "CD8 T cells")
+activ_nkt <- subset(krecurlustered,
+                    idents = "Activated NK and CD8 T cells")
+prolif_nkt <- subset(krecurlustered,
+                    idents = "Prolif NK and T cells")
+
+subsets <- list(NK = nk,
+                CD8_T = cd8t,
+                Activated_NK_T = activ_nkt,
+                Prolif_NK_T = prolif_nkt)
+
+for (celltype in names(subsets)) {
+  # Set seed before random downsampling
+  set.seed(132)
+  Idents(subsets[[celltype]]) <- subsets[[celltype]]$treatment
+  print(celltype)
+  print(table(subsets[[celltype]]$treatment))
+  # Subset the highest number that makes all treatment groups equal in cell number
+  type <-
+    subset(subsets[[celltype]],
+           downsample = table(subsets[[celltype]]$treatment) %>%
+             min())
+  ## Check that worked: cell numbers across treatments should be equal
+  print(paste("Downsampled",
+              celltype))
+  print(table(type$treatment))
+  # Label cells by treatment group
+  Idents(type) <- type$treatment
+  # Assign to an object
+  assign(celltype, type)
+  ## Plot
+  print(DimPlot(type,
+                split.by = "treatment"))
+  ## Plot granzyme expression
+  pdf(paste0("Plots/K7M2_2/",
+             celltype,
+             "_GzmVln",
+             ".pdf"),
+      height = 14,
+      width = 10)
+  print(VlnPlot(type,
+                features = c("Gzmd",
+                             "Gzme",
+                             "Gzmc",
+                             "Gzmf",
+                             "Gzmg",
+                             "Gzma",
+                             "Gzmb",
+                             "Prf1",
+                             "Xcl1"),
+                log = T,
+                split.by = "treatment",
+                group.by = "treatment",
+                cols = c("grey", "darkblue", "orangered", "purple"))
+        )
+  dev.off()
+}
+```
+
+
+```{r granzymes, fig.height = 11,fig.width=9,dependson="anysubset2"}
 #Granzymes
 Idents(nk_t) <- nk_t$treatment
 VlnPlot(nk_t,
@@ -807,6 +946,234 @@ VlnPlot(nk_t,
         log = T,
         split.by = "treatment")
 dev.off()
+```
+
+### nkt closer look
+
+```{r nkdegt-trt, dependson="deg", fig.height = 6, fig.width = 15}
+Idents(nk_t) <- nk_t$treatment
+nkt_markers <- FindAllMarkers(nk_t,
+                              min.pct = 0.25,
+                              logfc.threshold = 0.25,
+                              only.pos = F)
+
+# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
+# Print top 10 in each cluster
+nkt_markers %>%
+  group_by(cluster) %>%
+  top_n(n = 15, wt = avg_log2FC) -> t
+
+# Get dataframe into proper format 
+t <- as.data.frame(t)
+#t$cluster <- as.numeric(as.character(t$cluster))
+#t <- t[order(t$cluster),]
+t <- t[,c(7, 1:6)]
+t <- t[,c(7, 1:6)]
+#could also use arrange() to sort by column
+
+# Create interactive datatable showing top 10 DEG in each cluster 
+DT::datatable(t, 
+              rownames = FALSE,
+              extensions = c('FixedColumns',
+                             'Buttons'),
+              options = list(
+                pageLength = 15,
+                scrollX = TRUE,
+                scrollCollapse = TRUE,
+                dom = 'Bfrtip',
+                buttons = c('copy',
+                            'csv',
+                            'excel')
+              ))
+
+DotPlot(nk_t,
+        features = unique(t$gene),
+        group.by = "treatment",
+        scale = FALSE,
+        cols = c("lightgoldenrod", "darkred")) +
+  ggtitle("NK & T cell DEGs between Treatments") +
+  RotatedAxis()
+```
+
+# Subset Cell ID Analysis
+
+Uses krecurlustered subsets
+
+```{r cell_subset, fig.width=10, fig.height=10}
+library(cowplot)
+source("enrichplot_codeforbarplot.R")
+source("dgea.R")
+
+# Change idents to cell identities
+Idents(krecurlustered) <- krecurlustered$cell_ids
+# Create list for plots
+keggplots <- list()
+pathwayenrich <- list()
+# match color to what is used in r_dimplot (above)
+cols2id <- c("#D43F3AFF", "#EEA236FF", "#357EBDFF", "#5CB85CFF",
+             "#B8B8B8FF", "#9632B8FF", "#46B8DAFF", "#90302DFF",
+             "#A66D04FF", "#2D577FFF", "#3E7E3EFF", "#7D7D7DFF",
+             "#6D1D87FF", "#097F9AFF", "#FF6E6AFF", "#FFBB70FF",
+             "#68A4E3FF", "#79D379FF", "#CDCDCDFF", "#BF6BE2FF",
+             "#69D1F3FF")
+names(cols2id) <- 
+  sort(levels(krecurlustered))
+
+# DEG and KEGG pathway analyses on subsetted cell types
+for (cell_id in levels(krecurlustered)) {
+  # subset each cell type
+  cell_type <- subset(krecurlustered,
+                      idents = cell_id)
+  # plot by treatment group (for figures)
+  cell_type_plot <-
+    DimPlot(cell_type,
+            group.by = "cell_ids",
+            split.by = "treatment",
+            cols = scales::alpha(c(cols2id[[cell_id]],
+                                   sample(rainbow(1000))),
+                                 0.6)) +
+    xlim(-10,10) + 
+    ylim(-10,10) +
+    coord_fixed() +
+    ggtitle(paste(cell_id, "prior to downsampling"))
+  ## print in rmd output
+  print(cell_type_plot)
+  ## create pdf for use in figures
+  pdf(file = paste0("Plots/K7M2_2/",
+                    cell_id,
+                    "fromkrecurl_dimplot.pdf"),
+      height = 4,
+      width = 16)
+  print(cell_type_plot)
+  dev.off()
+  # create table of cell type # per treatment group
+  Idents(cell_type) <- cell_type$treatment
+  print(table(cell_type$treatment))
+  # randomly downsample to have the same number of cells per treatment group
+  cell_type <- subset(cell_type,
+                      downsample = table(cell_type$treatment) %>%
+                        min())
+  # provide status message on which cell type is being analyzed
+  print(paste("Analyzing Downsampled", cell_id))
+  # check that cell numbers are now equal between treatment groups
+  print(table(cell_type$treatment))
+  # if more then 20 cells per group, perform DEG and pathway analyses
+  if (min(table(cell_type$treatment)) > 20) {
+    Idents(cell_type) <- cell_type$treatment
+    # perform dgea heatplot analysis
+    subset(cell_type,
+           idents = c("2 - oHSV",
+                      "4 - oHSV+Trabectedin")) %>%
+      dgea_barplot()
+    #### KEGG analysis ####
+    # find DEGs with |logfc| > 0.05 and arrange in decreasing order
+    trtdiff <- FindMarkers(cell_type,
+                           ident.1 = "4 - oHSV+Trabectedin",
+                           ident.2 = "2 - oHSV",
+                           logfc.threshold = 0.05,
+                           only.pos = F) %>%
+      arrange(-abs(avg_log2FC))
+    print(head(trtdiff, n=20))
+    # Plot top 10 DEGs
+    pdf(paste0("Plots/K7M2_2/",
+               cell_id,
+               "_topdegs.pdf"),
+        height = 15,
+        width = 15)
+    print(VlnPlot(cell_type,
+                  features = head(rownames(trtdiff)),
+                  group.by = "treatment",
+                  cols = c("grey",
+                           "darkblue",
+                           "orangered",
+                           "purple"),
+                  log = T))
+    dev.off()
+    # put DEG output into proper form for kegg analysis
+    trtdiff <- as.data.frame(trtdiff)
+    trtdiff <- arrange(trtdiff, desc(avg_log2FC))
+    degs <- as.vector(trtdiff$avg_log2FC)
+    names(degs) <- rownames(trtdiff) %>%
+      str_replace("HSV1-","")
+    # convert gene names to entrezid
+    conversion <-
+      clusterProfiler::bitr(geneID = names(degs),
+                            fromType = "SYMBOL",
+                            toType = "ENTREZID",
+                            OrgDb = "org.Mm.eg.db")
+    # put proper gene names into correct format to input into kegg analysis
+    keggdegs <-
+      as.data.frame(degs) %>%
+      rownames_to_column("SYMBOL") %>%
+      inner_join(conversion,
+                 by = "SYMBOL") %>%
+      pull(degs,
+           name = ENTREZID)
+    # perform kegg pathway analysis and visualize
+    gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
+                                          organism = "mmu",
+                                          eps = 0)
+    gsea_KEGG <- mutate(gsea_KEGG,
+                        p.adjust = -log10(p.adjust))
+    #### Plot ####
+    if (nrow(gsea_KEGG) > 0) {
+      # Dotplot
+      keggplots[["KEGG_Dot"]][[cell_id]] <- 
+        enrichplot::dotplot(gsea_KEGG,
+                            x = "NES",
+                            showCategory = 25,
+                            font.size = 8,
+                            color = "NES") +
+        labs(title = "Enrichment of Pathways in Combination Therapy",
+             subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
+      ## print in output
+      print(keggplots[["KEGG_Dot"]][[cell_id]])
+      # Bar plot
+      keggplots[["KEGG_Bar"]][[cell_id]] <- 
+        barplot.enrichResult(gsea_KEGG,
+                             font.size=8,
+                             label_format=15) +
+        labs(title = "Enrichment of Pathways in Combination Therapy",
+             subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
+      ## print in output
+      print(keggplots[["KEGG_Bar"]][[cell_id]])
+      # save enrichment object
+      pathwayenrich[["KEGG"]][[cell_id]] <- gsea_KEGG
+    } else {
+      # if no signficant pathways are found, state this in (empty) output plot
+      keggplots[["KEGG_Dot"]][[cell_id]] <-
+        ggplot(tibble(x = "A", y = "A",
+                      text = "No significant hits"),
+               aes(x = x, y = y, label = text)) +
+        geom_text() +
+        theme(axis.text = element_text(size = 5)) +
+        labs(title = "Enrichment of Pathways in Combination Therapy",
+             subtitle = paste("KEGG Gene Sets from", cell_id, "in K7M2"))
+      # print plots in output
+      print(keggplots[["KEGG_Dot"]][[cell_id]])
+    }
+    
+    pdf(paste0("Plots/K7M2_2/",
+               cell_id,
+               "_KEGGenrichmentdot.pdf"),
+        height = 6,
+        width = 4)
+    print(keggplots[["KEGG_Dot"]][["cell_id"]])
+    dev.off()
+
+    pdf(paste0("Plots/K7M2_2/",
+               cell_id,
+               "_KEGGenrichmentbar.pdf"),
+        height = 6,
+        width = 6)
+    print(keggplots[["KEGG_Bar"]][[cell_id]])
+    dev.off()
+  } else {
+    # notify if a cell type has less than 20 cells (excluded from analyses)
+    message("Insufficent cell number for ", cell_id)
+  }
+  assign(cell_id, cell_type)
+}
 ```
 
 -------
@@ -1166,167 +1533,6 @@ DotPlot(myeloid,
   RotatedAxis() + theme(axis.text.x = element_text(size = 5)) + theme(axis.text.y = element_text(size = 5)
 ```
 
----------
-
-## NK and T cell Pathway Analysis
-
-Uses krecurlustered subset of activated NK and T cells 
-
-### nkt closer look
-```{r nkdegt-trt, dependson="deg", fig.height = 6, fig.width = 15,eval=FALSE}
-Idents(nk_t) <- nk_t$treatment
-nkt_markers <- FindAllMarkers(nk_t,
-                              min.pct = 0.25,
-                              logfc.threshold = 0.25,
-                              only.pos = F)
-
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
-# Print top 10 in each cluster
-nkt_markers %>%
-  group_by(cluster) %>%
-  top_n(n = 15, wt = avg_log2FC) -> t
-
-# Get dataframe into proper format 
-t <- as.data.frame(t)
-#t$cluster <- as.numeric(as.character(t$cluster))
-#t <- t[order(t$cluster),]
-t <- t[,c(7, 1:6)]
-t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
-
-# Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(t, 
-              rownames = FALSE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 15,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
-
-DotPlot(nk_t,
-        features = unique(t$gene),
-        group.by = "treatment",
-        scale = FALSE,
-        cols = c("lightgoldenrod", "darkred")) +
-  ggtitle("NK & T cell DEGs between Treatments") +
-  RotatedAxis()
-```
-
-# Subset Cell ID Analysis
-
-```{r cell_subset}
-library(cowplot)
-
-# Change idents to cell identities
-Idents(krecurlustered) <- krecurlustered$cell_ids
-
-# Create list for plots
-plots <- list()
-
-for (cell_id in levels(krecurlustered)) {
-  cell_type <- subset(krecurlustered,
-                      idents = cell_id)
-  Idents(cell_type) <- cell_type$treatment
-  print(table(cell_type$treatment))
-  cell_type <- subset(cell_type,
-                      downsample = table(cell_type$treatment) %>%
-                        min())
-  print(paste("Analyzing Downsampled", cell_id))
-  print(table(cell_type$treatment))
-  if (min(table(cell_type$treatment)) > 20) {
-    assign(cell_id, cell_type)
-    Idents(cell_type) <- cell_type$treatment
-    trtdiff <- FindMarkers(cell_type,
-                           ident.1 = "4 - oHSV+Trabectedin",
-                           ident.2 = "2 - oHSV",
-                           logfc.threshold = 0.05,
-                           only.pos = F) %>%
-      arrange(-abs(avg_log2FC))
-    print(head(trtdiff, n=20))
-    
-    pdf(paste0("Plots/K7M2_2/",
-               cell_id,
-               "_topdegs.pdf"),
-        height = 15,
-        width = 15)
-    print(VlnPlot(cell_type,
-                  features = head(rownames(trtdiff)),
-                  group.by = "treatment"))
-    dev.off()
-    
-    trtdiff <- as.data.frame(trtdiff)
-    trtdiff <- arrange(trtdiff, desc(avg_log2FC))
-    degs <- as.vector(trtdiff$avg_log2FC)
-    names(degs) <- rownames(trtdiff) %>%
-      str_replace("HSV1-","")
-
-    conversion <-
-      clusterProfiler::bitr(geneID = names(degs),
-                            fromType = "SYMBOL",
-                            toType = "ENTREZID",
-                            OrgDb = "org.Mm.eg.db")
-
-    keggdegs <-
-      as.data.frame(degs) %>%
-      rownames_to_column("SYMBOL") %>%
-      inner_join(conversion,
-                 by = "SYMBOL") %>%
-      pull(degs,
-           name = ENTREZID)
-    
-    gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
-                                          organism = "mmu",
-                                          eps = 0)
-    gsea_KEGG <- mutate(gsea_KEGG,
-                        p.adjust = -log10(p.adjust))
-
-    if (nrow(gsea_KEGG) > 0) {
-      plots[["KEGG"]][[cell_id]] <- 
-      # pdf(file = paste0("Plots/K7M2_2/kegg_", cell_id, ".pdf"),
-      #     height = 10,
-      #     width = 10)
-      #print(
-        enrichplot::dotplot(gsea_KEGG,
-                            x = "NES",
-                            showCategory = 25,
-                            font.size = 8,
-                            color = "NES") +
-          labs(title = "Enrichment of Pathways in Combination Therapy",
-               subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-      #)
-      #dev.off()
-    } else {
-      plots[["KEGG"]][[cell_id]] <-
-      # pdf(file = paste0("Plots/K7M2_2/kegg_", cell_id, ".pdf"),
-      #     height = 10,
-      #     width = 10)
-      # print(
-        ggplot(tibble(x = "A", y = "A",
-                      text = "No significant hits"),
-               aes(x = x, y = y, label = text)) +
-          geom_text() +
-          theme(axis.text = element_text(size = 5)) +
-          labs(title = "Enrichment of Pathways in Combination Therapy",
-               subtitle = paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-      #)
-      #dev.off()
-    }
-    
-    print(plots[["KEGG"]][[cell_id]])
-    #plot_grid(plotlist = plots[["KEGG"]], ncol = 3)
-    
-  } else {
-    message("Insufficent cell number for ", cell_id)
-  }
-}
-
-```
 
 ```{r ifng,dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
 k7m2_ifn_vln <- VlnPlot(K7M2_hsv_even,
@@ -1758,6 +1964,7 @@ plot_complex_heatmap(mye_ligands_nkt_reclub)
 ##NK -> DC -> T
 ```
 
+---------
 
 # oHSV Analysis
 
