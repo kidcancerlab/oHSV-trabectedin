@@ -225,11 +225,15 @@ dgea_barplot <- function(input_data,
       if (direction == "up") {
         de_genes <-
           de_genes[de_genes$p_val < 0.05 &
-                     de_genes$avg_log2FC > 0, ]
+                     de_genes$avg_log2FC > 0, ] 
+        de_genes <- rownames(de_genes) %>%
+          str_replace("HSV1-","") 
       } else {
         de_genes <-
           de_genes[de_genes$p_val < 0.05 &
                      de_genes$avg_log2FC < 0, ]
+        de_genes <- rownames(de_genes) %>%
+          str_replace("HSV1-","") 
       }
     # Preparing clusterProfiler to perform hypergeometric test on msigdb signatures
     temp <-
