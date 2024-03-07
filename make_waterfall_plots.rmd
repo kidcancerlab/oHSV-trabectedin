@@ -1,0 +1,226 @@
+---
+title: "Untitled"
+output: github_document
+author: "Matthew Gust"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r}
+library(tidyverse)
+library(pzfx)
+library(scales)
+library(writexl)
+library(purrr)
+```
+
+# Plot Info
+```{r}
+cols <- c("PBS" = "#818181",
+          "oHSV" = "#0C5CA1",
+          "Trab." = "#C94B27",
+          "oHSV + Trab." = "#8A6BAF",
+          "oHSV + anti-NK" = "#0F8F5F",
+          "oHSV + Trab. + anti-NK" = "#FBAF3F",
+          "oHSV + Trab. + control serum" = "#0F8F5F",
+          "oHSV + Trab. + anti-NK" = "#FBAF3F",
+          "oHSV + Trab. + anti-CD4" = "#0F8F5F",
+          "oHSV + Trab. + anti-CD8" = "#0C5CA1",
+          "oHSV + Trab. + anti-CD4 + anti-CD8" = "#FBAF3F")
+
+
+trt_grp_order <-
+    c("PBS",
+      "oHSV",
+      "oHSV + anti-NK",
+      "Trab.",
+      "oHSV + Trab.",
+      "oHSV + Trab. + control serum",
+      "oHSV + Trab. + anti-NK",
+      "oHSV + Trab. + anti-CD4",
+      "oHSV + Trab. + anti-CD8",
+      "oHSV + Trab. + anti-CD4 + anti-CD8")
+```
+
+# Helper Functions
+```{r}
+#Create summarized dataframe for plotting
+summarized_df <- function(df) {
+    #Create calc_resp if that column is not present
+    if(!"calc_resp" %in% colnames(df)) {
+        df$calc_resp <- rep(NA, nrow(df))
+    }
+    
+    wtrfall_plt <- group_by(df, Treatment, Mouse_num) %>%
+        summarize(min = min(relative_tumor_vol),
+                  max = max(relative_tumor_vol),
+                  Treatment = unique(Treatment),
+                  calc_resp = unique(calc_resp),
+                  Experiment = unique(Experiment),
+                  rtv_at_max_tp = unique(rtv_at_max_tp))
+
+    #Add best overall response columns
+    for (i in seq_len(nrow(wtrfall_plt))) {
+        if (wtrfall_plt$calc_resp[i] == "PD") {
+            wtrfall_plt$BOR1[i] <- wtrfall_plt$max[i]
+            wtrfall_plt$BOR2[i] <- wtrfall_plt$max[i]
+        } else if (wtrfall_plt$calc_resp[i] == "PR") {
+            wtrfall_plt$BOR1[i] <- max(wtrfall_plt$min[i], 10^-1)
+            wtrfall_plt$BOR2[i] <- wtrfall_plt$min[i]
+        } else if (wtrfall_plt$calc_resp[i] == "SD") {
+            wtrfall_plt$BOR1[i] <- wtrfall_plt$rtv_at_max_tp[i]
+            wtrfall_plt$BOR2[i] <- wtrfall_plt$max[i]
+        } else {
+            wtrfall_plt$BOR1[i] <- 10^-1 # Shortened the CR interval
+            wtrfall_plt$BOR2[i] <- 10^-1 # Maybe we can add a horizontal line with a label "CR"? # nolint
+        }
+    }
+    return(wtrfall_plt)
+}
+
+#Create waterfall plot from summarized dataframe
+make_wtrfall_plot <- function(df) {
+    df$Treatment <- factor(df$Treatment, levels = trt_grp_order)
+    #Create position column to order bars the right way
+    df <- arrange(df, desc(BOR1)) %>%
+        arrange(Treatment)
+
+    df$x_position <- seq_len(nrow(df))
+
+    # df$x_position <- nrow(df) + 1 - rank(df$BOR1, ties.method = "random")
+
+
+    #Variable to hold experiment
+    experiment <- unique(df$Experiment)
+    #Create plot
+    plot <- ggplot(df, aes(x = x_position, y = BOR1)) +
+        geom_bar(stat = "identity", aes(fill = Treatment), width = 0.7) +
+        scale_fill_manual(values = cols) +
+        geom_hline(yintercept = 1) +
+        geom_hline(yintercept = 0.5, linetype = "dotted") +
+        geom_hline(yintercept = 1.25, linetype = "dotted") +
+        geom_hline(yintercept = 0.1) + # Added a line that we will relabel as "CR" # nolint
+        labs(x = "",
+             y = "Best Overall Response", # More accessible axis title
+             title = paste(experiment, "28-day Treatment Response")) + # Will need to make this variable-driven for different figure # nolint
+        theme(panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.background = element_blank(),
+              axis.text.x = element_blank(),
+              axis.ticks.x = element_blank(),
+              axis.line.x = element_blank(),
+              axis.line.y = element_line(color = "black")) +
+              scale_y_log10(labels = c("CR", "-50%", "0%", "25%"),
+                            breaks = c(0.1, 0.50, 1, 1.25))
+}
+
+#Calculate response category
+calc_resp <- function(df) {
+    df <- df %>%
+        group_by(Treatment, Mouse_num) %>%
+        mutate(max_timepoint = max(timepoint)) %>%
+        filter(timepoint == max_timepoint) %>%
+        select(Treatment,
+               Mouse_num,
+               max_timepoint,
+               rtv_at_max_tp = relative_tumor_vol) %>%
+        right_join(df, by = c("Treatment", "Mouse_num"))
+
+    group_by(df, Treatment, Mouse_num) %>%
+        mutate(calc_resp = if(any(relative_tumor_vol == 0)) {
+            "CR"
+        } else if(min(relative_tumor_vol) < 0.5) {
+            "PR"
+        } else if(unique(rtv_at_max_tp) < 1.25) { # nolint
+            "SD"
+        } else {
+            "PD"
+        }
+    )
+}
+```
+
+
+# Analysis
+
+## Reading in all Files
+These files were initially prism files that I converted to csv's in order to easily clean and reformat in excel.
+```{r}
+#Create variable to store different experiment names
+experiments <- list.files("Input")
+#List to hold each experiment's combined dataframe
+dfs_list <- list()
+#Loop through experiments to download files
+for(i in experiments) {
+    #Var to hold sheets
+    sheets <- paste("Input", i, list.files(paste0("Input/", i)), sep = "/")
+
+    sheet_df <- data.frame()
+    #Loop through all sheets in each experiment
+    for (k in sheets) {
+        tmp <- read.csv(k, fileEncoding="UTF-8-BOM") # Added the encoding to make it work cross-platform #nolint
+        #Rename columns to ID mice (arbitrary labels)
+        names(tmp)[!names(tmp) %in% c("timepoint", "Treatment")] <-
+            paste("Mouse", seq_len(ncol(tmp) - 2), sep = "_")
+        #Add Column to identify which experiment it is
+        tmp$Experiment <- i
+        #Pivot longer so all Mouse_#'s are in one col
+        tmp <- pivot_longer(data = tmp,
+                            cols = which(startsWith(colnames(tmp), "Mouse_")),
+                            names_to = "Mouse_num",
+                            values_to = "tumor_vol")
+        #Remove "Invalid Number", set cutoff of 28 days and calculate relative_tumor_vol # nolint
+        tmp <- tmp %>%
+            filter(tumor_vol != "Invalid Number" &
+                   timepoint <= 28) %>%
+            group_by(Mouse_num) %>%
+            mutate(relative_tumor_vol = tumor_vol/tumor_vol[1])
+        #Add this sheet to dataframe with info for this experiment
+        sheet_df <- rbind(sheet_df, tmp)
+    }
+    #Add experiment data frame to list of dataframes
+    dfs_list[[i]]  <- sheet_df
+}
+```
+
+## Generating Plots
+
+Now that the data is loaded in and organized, I will generate a waterfall plot displaying best overall response for each experiment.
+```{r}
+#Generate Waterfall plots for all experiments
+summarized_dfs_list <- lapply(dfs_list, calc_resp)
+summarized_dfs_list <- lapply(summarized_dfs_list, summarized_df)
+plots <- lapply(summarized_dfs_list, make_wtrfall_plot)
+pdf("Figures/waterfall_plots.pdf")
+print(plots)
+dev.off()
+```
+
+## Pairwise Fisher Tests
+
+For all experiments we will test the following null hypothesis at a significance level of 0.05 between each pair of treatments: the objective response rate is the same between the two treatments.
+```{r}
+#Create table of responses and then perform pairwise fisher multiple tests
+fisher_tests <- lapply(summarized_dfs_list, function(x) {
+    tmp <- group_by(x, Treatment) %>%
+        summarize("Response" = sum(calc_resp %in% c("CR", "PR", "SD")),
+                  "No_Response" = sum(calc_resp == "PD")) %>%
+        column_to_rownames(var = "Treatment")
+    rstatix::pairwise_fisher_test(tmp, p.adjust.method = "BH")
+})
+write_xlsx(
+    x = fisher_tests,
+    path = "Output/fisher_test.xlsx"
+)
+
+#Generate list of tables with responses for each treatment in each experiment
+resp_tabs <- lapply(summarized_dfs_list, function(x) {
+    group_by(x, Treatment) %>%
+        summarize("Response" = sum(calc_resp %in% c("CR", "PR", "SD")),
+                  "No_Response" = sum(calc_resp == "PD")) %>%
+        column_to_rownames(var = "Treatment")
+})
+```
