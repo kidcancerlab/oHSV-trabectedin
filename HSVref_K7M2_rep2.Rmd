@@ -421,100 +421,6 @@ DT::datatable(t,
               ))
 ```
 
-## SingleR Cell Predictions
-
-This is an automatic prediction method for cell types. Here, I specifically use the SingleR mouse immune reference for predicted cell assignment of cell clusters. Often this method is a general assignment and may miss more specific cell subtypes, especially for macrophages.
-
-```{r singlr, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
-# Automatic prediction of cell types using SingleR
-# BiocManager::install("SingleCellExperiment")
-library(SingleR)
-library(celldex)
-library(SingleCellExperiment)
-
-
-# Convert the Seurat object to a SCE object
-K7M2_hsv_even_sce <- as.SingleCellExperiment(K7M2_hsv_even)
-
-
-# Load the mouse reference library & immune-specific mouse data
-ref1 <- MouseRNAseqData()
-ref2 <- ImmGenData()
-
-# Make cell type predictions using SingleR
-Tumor_hsv_pred_types <- SingleR(test = K7M2_hsv_even_sce,
-                                ref = list(ref1,
-                                           ref2),
-                                labels = list(ref1$label.main,
-                                              ref2$label.main))
-# Clean up environment
-rm(K7M2_hsv_even_sce, ref1, ref2)
-```
-
-```{r singler_cont, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
-# Transfer labels back to the Seurat object and plot
-K7M2_hsv_even$singleR2 <- Tumor_hsv_pred_types$labels
-
-maxv <- apply(Tumor_hsv_pred_types$scores, 
-              MARGIN = 1, 
-              function(x) max(x,
-                              na.rm = TRUE))
-hist(maxv,
-     n = 200)
-
-K7M2_hsv_even$singleRscore <- maxv  #scores may be a matrix
-
-as.data.frame(K7M2_hsv_even@meta.data) %>%
-  as_tibble() %>%
-  ggplot(aes(x = singleRscore)) +
-  geom_histogram(bins = 200) +
-  facet_wrap(~singleR2,
-             ncol = 3,
-             scales = "free_y") #****
-  
-table(K7M2_hsv_even$singleR2,
-      K7M2_hsv_even$treatment)
-```
-
-```{r singlr_plot, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
-Idents(K7M2_hsv_even) <- K7M2_hsv_even$singleR2 
-
-DimPlot(K7M2_hsv_even,
-        reduction = "umap",
-        pt.size = 0.5,
-        label = T,
-        repel = T) +
-  coord_fixed() +
-  ggtitle("Mouse Reference")
-```
-
-```{r singlr_plot2, fig.width=12, fig.height=5, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
-# Rename cell ids
-K7M2_hsv_even <- 
-  RenameIdents(K7M2_hsv_even,
-               "Dendritic cells" = "DC",
-               "Tgd" = "T cells",
-               "Stem cells" = "Tumor cells",
-               "Granulocytes" = "Neutrophils",
-               "Erythrocytes" = "Tumor cells",
-               "Adipocytes" = "Tumor cells",
-               "Fibroblasts" = "Tumor cells") %>%
-  StashIdent(save.name = "SingleR2ed")
-
-k7m2_ids <- DimPlot(K7M2_hsv_even,
-                    reduction = "umap",
-                    pt.size = 0.5,
-                    label = T,
-                    repel = T,
-                    split.by = "treatment") +
-  coord_fixed() +
-  ggtitle("Mouse Reference")
-k7m2_ids
-pdf("Plots/K7M2_2/k7m2_ids_dim.pdf", height = 10, width = 20)
-k7m2_ids
-dev.off()
-```
-
 # Try recursive clustering
 
 ```{r recurl, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
@@ -551,6 +457,16 @@ par(mfrow=c(2,3),
 C50_29 = createPalette(50,
                        c("#ff0000", "#ffff00", "#00ff00", "#0000ff"),
                        range = c(20, 90))
+
+pdf("Plots/krecurlustered_level2.pdf",
+    height = 10,
+    width = 12)
+DimPlot(krecurlustered,
+        group.by="clust_2",
+        cols = unname(C50_29)) +
+  coord_fixed() +
+  ggtitle("Recursive Clustering Assignment")
+dev.off()
 
 DimPlot(krecurlustered,
         cols = unname(C50_29))
@@ -686,7 +602,122 @@ for (celltype in names(subsets)) {
 }
 ```
 
-## Assign Cell Identities
+# Assign Cell Identities
+
+## SingleR Cell Predictions
+
+This is an automatic prediction method for cell types. Here, I specifically use the SingleR mouse immune reference for predicted cell assignment of cell clusters. Often this method is a general assignment and may miss more specific cell subtypes, especially for macrophages.
+
+```{r singlr, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
+# Automatic prediction of cell types using SingleR
+# BiocManager::install("SingleCellExperiment")
+library(SingleR)
+library(celldex)
+library(SingleCellExperiment)
+
+# Convert the Seurat object to a SCE object
+krecurlustered_sce <- as.SingleCellExperiment(krecurlustered)
+
+# Load the mouse reference library & immune-specific mouse data
+ref1 <- MouseRNAseqData()
+ref2 <- ImmGenData()
+
+# Make cell type predictions using SingleR
+Tumor_hsv_pred_types <- SingleR(test = krecurlustered_sce,
+                                ref = list(ref1,
+                                           ref2),
+                                labels = list(ref1$label.main,
+                                              ref2$label.main))
+# Clean up environment
+rm(krecurlustered_sce, ref1, ref2)
+```
+
+```{r singler_cont, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
+# Transfer labels back to the Seurat object and plot
+krecurlustered$singleR2 <- Tumor_hsv_pred_types$labels
+
+maxv <- apply(Tumor_hsv_pred_types$scores, 
+              MARGIN = 1, 
+              function(x) max(x,
+                              na.rm = TRUE))
+hist(maxv,
+     n = 200)
+
+krecurlustered$singleRscore <- maxv  #scores may be a matrix
+
+as.data.frame(krecurlustered@meta.data) %>%
+  as_tibble() %>%
+  ggplot(aes(x = singleRscore)) +
+  geom_histogram(bins = 200) +
+  facet_wrap(~singleR2,
+             ncol = 3,
+             scales = "free_y") #****
+  
+table(krecurlustered$singleR2,
+      krecurlustered$treatment)
+```
+
+```{r singlr_plot, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
+Idents(krecurlustered) <- krecurlustered$singleR2 
+# Plot
+krecurlustered <- 
+  RenameIdents(krecurlustered,
+               "Dendritic cells" = "DC") %>%
+  StashIdent(save.name = "SingleR2")
+
+DimPlot(krecurlustered,
+        reduction = "umap",
+        pt.size = 0.5,
+        label = T,
+        repel = T) +
+  coord_fixed() +
+  ggtitle("Mouse Reference")
+
+pdf("Plots/K7M2_2/singlr.pdf",
+    height = 10,
+    width = 10)
+r_dim_plot(krecurlustered,
+           reduction = "umap",
+           pt.size = 0.5,
+           label = T,
+           repel = T) +
+  coord_fixed() +
+  ggplot2::theme(legend.position = "right") +
+  ggtitle("Mouse Reference")
+dev.off()
+```
+
+```{r singlr_plot2, fig.width=12, fig.height=5, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
+# Rename cell ids
+krecurlustered <- 
+  RenameIdents(krecurlustered,
+               "Dendritic cells" = "DC",
+               "Tgd" = "T cells",
+               "Stem cells" = "Tumor cells",
+               "Granulocytes" = "Neutrophils",
+               "Erythrocytes" = "Tumor cells",
+               "Adipocytes" = "Tumor cells",
+               "Fibroblasts" = "Tumor cells") %>%
+  StashIdent(save.name = "SingleR2ed")
+
+k7m2_ids <- r_dim_plot(krecurlustered,
+                       reduction = "umap",
+                       pt.size = 0.5,
+                       label = T,
+                       repel = T,
+                       split.by = "treatment") +
+  coord_fixed() +
+  ggtitle("Mouse Reference")
+k7m2_ids
+
+pdf("Plots/K7M2_2/k7m2_renamesinglr_split.pdf",
+    height = 10,
+    width = 20)
+k7m2_ids
+dev.off()
+```
+
+### Label cell identities
 
 ```{r cellname}
 # Idents(krecurlustered) <- krecurlustered$clust_3
@@ -730,13 +761,16 @@ krecurlustered$cell_ids <-
 #str_replace_all()
 labeled_dim <- r_dim_plot(krecurlustered,
                           group.by = "cell_ids",
-                          label = T,
-                          shuffle = T) +
-  coord_fixed()
+                          label = F,
+                          shuffle = T,
+                          #repel = T,
+                          split.by = "treatment") +
+  coord_fixed() + 
+  ggplot2::theme(legend.position = "right") +
 
-pdf(file = "Plots/K7M2_2/krecurl_cell_ids_dim",
-    height = 10,
-    width = 10)
+pdf(file = "Plots/K7M2_2/krecurl_cell_ids_dim_2.pdf",
+    height = 5,
+    width = 20)
 labeled_dim
 dev.off()
 
@@ -747,6 +781,7 @@ r_dim_plot(krecurlustered,
 ```
 
 ```{r anysubset2}
+library(dittoSeq)
 # set idents 
 Idents(krecurlustered) <- krecurlustered$cell_ids
 # subset cells
@@ -782,6 +817,11 @@ for (celltype in names(subsets)) {
   # Display overall cell count prior to downsampling
   table(subsets[[celltype]]$treatment) %>%
     print()
+  # show cell quantities
+  print(dittoBarPlot(subsets[[celltype]],
+                     var = "cell_ids",
+                     group.by = "treatment")) +
+    ggtitle(celltype)
   # Subset the highest number that makes all treatment groups equal in cell number
   type <-
     subset(subsets[[celltype]],
@@ -795,11 +835,24 @@ for (celltype in names(subsets)) {
   assign(paste0(celltype,
                 "_downsampled"),
          type)
+  # show cell quantities
+  print(dittoBarPlot(subsets[[celltype]],
+                     var = "cell_ids",
+                     group.by = "treatment",
+                     data.out = TRUE))
+  pdf(paste0("Plots/K7M2_2/",
+             celltype,
+             "cellgroup_subsets.pdf"))
+  print(dittoBarPlot(subsets[[celltype]],
+                     var = "cell_ids",
+                     group.by = "treatment"))
+  dev.off()
   ## Plot
   print(
     DimPlot(type,
-            split.by = "treatment")) +
+            split.by = "treatment") +
     ggtitle(paste(celltype, "Cells"))
+  )
 }
 ```
 
@@ -905,6 +958,34 @@ VlnPlot(nk_t,
         split.by = "treatment",
         cols = c("grey", "darkblue", "orangered", "purple"))
 dev.off()
+
+FoldChange(nk_t,
+           ident.1 = "4 - oHSV+Trabectedin",
+           ident.2 = "2 - oHSV",
+           features = c("Gzmd",
+                        "Gzme",
+                        "Gzmc",
+                        "Gzmf",
+                        "Gzmg",
+                        "Gzma",
+                        "Gzmb",
+                        "Prf1",
+                        "Xcl1")) %>%
+  print()
+
+FoldChange(nk_t,
+           ident.1 = "3 - Trabectedin",
+           ident.2 = "1 - Control",
+           features = c("Gzmd",
+                        "Gzme",
+                        "Gzmc",
+                        "Gzmf",
+                        "Gzmg",
+                        "Gzma",
+                        "Gzmb",
+                        "Prf1",
+                        "Xcl1")) %>%
+  print()
 ```
 
 ### Death receptor signaling
@@ -1001,8 +1082,11 @@ Uses krecurlustered subsets
 
 ```{r cell_subset, fig.width=10, fig.height=10}
 library(cowplot)
+library(forcats)
+library(ggstance)
 source("enrichplot_codeforbarplot.R")
-source("dgea.R")
+library(enrichplot)
+#source("dgea.R")
 
 # Change idents to cell identities
 Idents(krecurlustered) <- krecurlustered$cell_ids
@@ -1061,10 +1145,12 @@ for (cell_id in levels(krecurlustered)) {
   if (min(table(cell_type$treatment)) > 20) {
     Idents(cell_type) <- cell_type$treatment
     # perform dgea heatplot analysis
-    subset(cell_type,
-           idents = c("2 - oHSV",
-                      "4 - oHSV+Trabectedin")) %>%
-      dgea_barplot()
+    # subset(cell_type,
+    #        idents = c("2 - oHSV",
+    #                   "4 - oHSV+Trabectedin")) %>%
+    #   dgea_barplot()
+    # dev.off()
+
     #### KEGG analysis ####
     # find DEGs with |logfc| > 0.05 and arrange in decreasing order
     trtdiff <- FindMarkers(cell_type,
@@ -1087,7 +1173,8 @@ for (cell_id in levels(krecurlustered)) {
                            "darkblue",
                            "orangered",
                            "purple"),
-                  log = T))
+                  log = T)
+          )
     dev.off()
     # put DEG output into proper form for kegg analysis
     trtdiff <- as.data.frame(trtdiff)
@@ -1128,6 +1215,7 @@ for (cell_id in levels(krecurlustered)) {
              subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
       ## print in output
       print(keggplots[["KEGG_Dot"]][[cell_id]])
+      
       # Bar plot
       keggplots[["KEGG_Bar"]][[cell_id]] <- 
         barplot.enrichResult(gsea_KEGG,
@@ -1137,11 +1225,51 @@ for (cell_id in levels(krecurlustered)) {
              subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
       ## print in output
       print(keggplots[["KEGG_Bar"]][[cell_id]])
-      # save enrichment object
+      
+      # Bar Plot 2
+      keggplots[["KEGG_Bar2"]][[cell_id]] <- arrange(gsea_KEGG,
+                                                    abs(NES)) %>% 
+        group_by(sign(NES)) %>%
+        ggplot(aes(NES,
+                   fct_reorder(Description, NES),
+                   fill = NES),
+               showCategory = 30) + 
+        geom_col(orientation='y') + 
+        scale_fill_continuous(low="#357EBDFF",
+                              high="#D43F3AFF",
+                              guide=guide_colorbar(reverse=FALSE)) + 
+        theme_minimal() +
+        ylab(NULL) +
+        ggtitle(paste("Barplot of",
+                      cell_id,
+                      "KEGG: Version 2"))
+      print(keggplots[["KEGG_Bar2"]][[cell_id]])
+      
+      # heatplot
+      gsea_KEGG_symbol <- setReadable(gsea_KEGG,
+                                      'org.Mm.eg.db',
+                                      'ENTREZID')
+      pdf(file = paste0("Plots/K7M2_2/",
+                        cell_id,
+                        "_keggheatplot.pdf"),
+          height = 10,
+          width = 20)
+      print(heatplot(gsea_KEGG_symbol,
+               foldChange = keggdegs,
+               showCategory = 30) + 
+              scale_fill_gradient2(low="#357EBDFF",
+                                   mid = "lightgrey",
+                                   high="#D43F3AFF",
+                                   na.value = "tan",
+                                   midpoint = 0,
+                                   guide=guide_colorbar(reverse=FALSE))
+            )
+      dev.off()
+      #save enrichment object
       pathwayenrich[["KEGG"]][[cell_id]] <- gsea_KEGG
     } else {
       # if no signficant pathways are found, state this in (empty) output plot
-      keggplots[["KEGG_Dot"]][[cell_id]] <-
+      nohits <-
         ggplot(tibble(x = "A", y = "A",
                       text = "No significant hits"),
                aes(x = x, y = y, label = text)) +
@@ -1149,25 +1277,29 @@ for (cell_id in levels(krecurlustered)) {
         theme(axis.text = element_text(size = 5)) +
         labs(title = "Enrichment of Pathways in Combination Therapy",
              subtitle = paste("KEGG Gene Sets from", cell_id, "in K7M2"))
+      keggplots[["KEGG_Dot"]][[cell_id]] <- nohits
+      keggplots[["KEGG_Bar"]][[cell_id]] <- nohits
+      keggplots[["KEGG_Bar2"]][[cell_id]] <- nohits
       # print plots in output
       print(keggplots[["KEGG_Dot"]][[cell_id]])
     }
-    
+
     pdf(paste0("Plots/K7M2_2/",
                cell_id,
                "_KEGGenrichmentdot.pdf"),
         height = 6,
-        width = 4)
-    print(keggplots[["KEGG_Dot"]][["cell_id"]])
+        width = 8)
+    print(keggplots[["KEGG_Dot"]][[cell_id]])
     dev.off()
 
     pdf(paste0("Plots/K7M2_2/",
                cell_id,
-               "_KEGGenrichmentbar.pdf"),
+               "_KEGGenrichmentbar2.pdf"),
         height = 6,
-        width = 6)
-    print(keggplots[["KEGG_Bar"]][[cell_id]])
+        width = 12)
+    print(keggplots[["KEGG_Bar2"]][[cell_id]])
     dev.off()
+
   } else {
     # notify if a cell type has less than 20 cells (excluded from analyses)
     message("Insufficent cell number for ", cell_id)
