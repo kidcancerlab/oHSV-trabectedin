@@ -17,6 +17,19 @@ library(writexl)
 library(purrr)
 ```
 
+# Set-up Directory
+```{bash mkdirs, eval=FALSE, echo=TRUE}
+for directoryName in \
+    Output \
+    Figures
+do
+    if [ ! -d ${directoryName} ]
+    then
+        mkdir -p ${directoryName}
+    fi
+done
+```
+
 # Plot Info
 ```{r}
 cols <- c("PBS" = "#818181",
