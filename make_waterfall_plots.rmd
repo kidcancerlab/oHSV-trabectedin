@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Response Rate Waterfall Plots"
 output: github_document
 author: "Matthew Gust"
 ---
@@ -125,6 +125,7 @@ make_wtrfall_plot <- function(df) {
               axis.text.x = element_blank(),
               axis.ticks.x = element_blank(),
               axis.line.x = element_blank(),
+              #legend.position = "none",
               axis.line.y = element_line(color = "black")) +
               scale_y_log10(labels = c("CR", "-50%", "0%", "25%"),
                             breaks = c(0.1, 0.50, 1, 1.25))
@@ -145,9 +146,9 @@ calc_resp <- function(df) {
     group_by(df, Treatment, Mouse_num) %>%
         mutate(calc_resp = if(any(relative_tumor_vol == 0)) {
             "CR"
-        } else if(min(relative_tumor_vol) < 0.5) {
+        } else if(min(relative_tumor_vol) <= 0.5) {
             "PR"
-        } else if(unique(rtv_at_max_tp) < 1.25) { # nolint
+        } else if(unique(rtv_at_max_tp) <= 1.25) { # nolint
             "SD"
         } else {
             "PD"
@@ -212,11 +213,39 @@ print(plots)
 dev.off()
 ```
 
+## Counts for Each Response Category
+*for inclusion in supplemental information*
+
+```{r}
+# Generate output with response numbers for each treatment and save
+resp_counts <- list()
+for (trt_id in names(summarized_dfs_list)) {
+  resp_counts[[trt_id]] <- 
+    table(summarized_dfs_list[[trt_id]][["calc_resp"]],
+          summarized_dfs_list[[trt_id]][["Treatment"]]) %>%
+    as.data.frame() %>%
+    mutate(Var1 = factor(Var1,
+                         levels = c("CR",
+                                    "PR",
+                                    "SD",
+                                    "PD"))) %>%
+    arrange(Var1) %>%
+    pivot_wider(names_from = "Var2",
+                values_from = "Freq") %>%
+    select(Var1,
+           trt_grp_order[trt_grp_order %in% colnames(.)]) %>%
+    as.data.frame()
+}
+
+capture.output(resp_counts, file = "resp_counts.txt")
+```
+
 ## Pairwise Fisher Tests
 
 For all experiments we will test the following null hypothesis at a significance level of 0.05 between each pair of treatments: the objective response rate is the same between the two treatments.
 ```{r}
 #Create table of responses and then perform pairwise fisher multiple tests
+##Based on disease control/stabilization rate
 fisher_tests <- lapply(summarized_dfs_list, function(x) {
     tmp <- group_by(x, Treatment) %>%
         summarize("Response" = sum(calc_resp %in% c("CR", "PR", "SD")),
@@ -229,11 +258,15 @@ write_xlsx(
     path = "Output/fisher_test.xlsx"
 )
 
-#Generate list of tables with responses for each treatment in each experiment
+#Generate list of tables with responses (disease control) for each treatment in each experiment
 resp_tabs <- lapply(summarized_dfs_list, function(x) {
     group_by(x, Treatment) %>%
         summarize("Response" = sum(calc_resp %in% c("CR", "PR", "SD")),
                   "No_Response" = sum(calc_resp == "PD")) %>%
         column_to_rownames(var = "Treatment")
 })
+```
+
+```{r}
+sessionInfo()
 ```
