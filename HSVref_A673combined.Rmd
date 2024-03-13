@@ -29,6 +29,8 @@ library(tidyverse)
 library(ggsci) # find where needed
 library(rrrSingleCellUtils)
 library(patchwork)
+library(data.table)
+library(enrichplot)
 source("scSeurat-addhsv.R")
 # Set the random generator seed so that results are reproducible.
 set.seed(888)
@@ -576,6 +578,7 @@ for (hsv_time in names(hsv_timepoints)) {
   print(plots[[paste0(hsv_time, "_plot")]])
 
 # Create FeaturePlots based on the timepoint module scores
+  ## Cutoff of 15
   plots[[paste0(hsv_time, "_plot_cutoff15")]] <- 
     FeaturePlot(A673_hsv_comb_even,
                 features = hsv_time,
@@ -585,9 +588,10 @@ for (hsv_time in names(hsv_timepoints)) {
                 min.cutoff = 0) +
     theme(aspect.ratio = 1)
   
-  print(plots[[paste0(hsv_time, "rfeatureplot_plot_cutoff1")]])
+  print(plots[[paste0(hsv_time, "rfeatureplot_plot_cutoff15")]])
   
-  plots[[paste0(hsv_time, "_plot_cutoff15")]] <- 
+  ## Cutoff of 1
+  plots[[paste0(hsv_time, "_plot_cutoff1")]] <- 
     r_feature_plot(A673_hsv_comb_even,
                    features = hsv_time,
                    split.by = "treatment",
@@ -596,10 +600,14 @@ for (hsv_time in names(hsv_timepoints)) {
                    min.cutoff = 0) +
     theme(aspect.ratio = 1)
   
-  print(plots[[paste0(hsv_time, "_plot_cutoff15")]])
+  print(plots[[paste0(hsv_time, "_plot_cutoff1")]])
   
-  pdf(paste0("Plots/A673_comb/rfeaturecutoff1_", hsv_time, trtmnt, ".pdf"),
-      height = 5, width = 10)
+  pdf(paste0("Plots/A673_comb/rfeaturecutoff1_",
+             hsv_time,
+             trtmnt,
+             ".pdf"),
+      height = 5,
+      width = 10)
   print(plots[[paste0(hsv_time, "rfeatureplot_plot_cutoff1")]])
   dev.off()
 }
@@ -1065,18 +1073,19 @@ gsea_enKEGG <- clusterProfiler::enrichKEGG(gene,
 browser <- clusterProfiler::browseKEGG(gsea_KEGG, 'hsa05168')
 
 ## Plot expression onto pathway
-library("pathview")
+library(pathview)
 hsa05168 <- pathview(gene.data  = keggdegs,
                      pathway.id = "hsa05168",
                      species    = "hsa",
                      limit      = list(gene=max(abs(keggdegs)), cpd=1))
 
 ## convert gene ID to Symbol
+library(DOSE)
 gsea_KEGG_symbol <- setReadable(gsea_KEGG, 'org.Hs.eg.db', 'ENTREZID')
-## heatmap
-heatplot(gsea_KEGG_symbol, foldChange=keggdegs, showCategory=30)
 
 gsea_KEGG_symbol2 <- pairwise_termsim(gsea_KEGG_symbol)
+
+# Treeplot
 treeplot(gsea_KEGG_symbol2, color = "NES")
 ```
 
