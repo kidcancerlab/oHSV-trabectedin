@@ -793,6 +793,21 @@ FindMarkers(A673_hsv_comb_even,
             #features = c(hsv_timepoints[["Immediate_Early_Genes"]]),
             logfc.threshold = 0,
             only.pos = FALSE)
+
+# Only keep genes found in the A673 data
+hsv_genes <- intersect(c(imm_early[[1]],
+                         early[[1]],
+                         late[[1]]),
+                       rownames(A673_hsv_comb_even))
+
+# Calculate fold change/p values for genes from the HSV1 pathway in the A673 data
+hsv_DEG <- FindMarkers(A673_hsv_comb_even,
+                       ident.1 = "4 - oHSV+Trabectedin",
+                       ident.2 = "2 - oHSV",
+                       features = hsv_genes,
+                       logfc.threshold = 0,
+                       min.pct = 0,
+                       only.pos = F)
 ```
 
 
@@ -1319,6 +1334,39 @@ FoldChange(A673_hsv_comb_even,
                        "EIF2AK2",
                        "PPP1CA"))
 ```
+
+```{r wholehsvpath_exp}
+# Generate list of all genes in the HSV1 pathway (hsa05168)
+hsa05168_genelist <- hsa05168$plot.data.gene[["labels"]]
+
+# Only keep genes found in the A673 data
+hsa05168_geneintersect <- intersect(hsa05168_genelist,
+                                    rownames(A673_hsv_comb_even))
+
+# Calculate fold change/p values for genes from the HSV1 pathway in the A673 data
+hsa05168_DEG <- FindMarkers(A673_hsv_comb_even,
+                            ident.1 = "4 - oHSV+Trabectedin",
+                            ident.2 = "2 - oHSV",
+                            features = hsa05168_geneintersect,
+                            logfc.threshold = 0,
+                            min.pct = 0,
+                            only.pos = F)
+
+write.csv(hsa05168_DEG,
+          file = "Data/A673_hsv_comb_even_hsa05168_DEG.csv")
+
+DotPlot(A673_hsv_comb_even,
+        features = c("EIF2AK2",
+                     "JAK1",
+                     "BIRC2",
+                     "BCL2",
+                     "PDIA3",
+                     "CALR",
+                     "SOCS3"),
+        group.by="treatment",
+        cols = "Spectral")
+```
+
 
 ### GO and KEGG of infected cells only
 
