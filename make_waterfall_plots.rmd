@@ -18,7 +18,7 @@ library(purrr)
 ```
 
 # Set-up Directory
-```{bash mkdirs, eval=FALSE, echo=TRUE}
+```{bash mkdirs, echo=TRUE}
 for directoryName in \
     Output \
     Figures
