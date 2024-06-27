@@ -1,5 +1,5 @@
 ---
-title: "Repeat A673 tumor only scRNAseq with HSV reference"
+title: "A673 tumor only scRNAseq with HSV reference"
 author: "Emily Franz"
 date: "`r format(Sys.time(), '%m/%d/%Y')`"
 output: 
@@ -92,27 +92,27 @@ for (item in sample_names) {
   plot1 <- FeatureScatter(obj,
                           feature1 = "nCount_RNA",
                           feature2 = "percent.mt") +
-  theme(legend.position="none")
+    theme(legend.position="none")
   
   plot2 <- FeatureScatter(obj,
                           feature1 = "nCount_RNA",
                           feature2 = "nFeature_RNA")  +
-  theme(legend.position="none")
+    theme(legend.position="none")
   
   print(plot1 + plot2 +
-    plot_annotation(title = sample_titles[[item]]))
-
+          plot_annotation(title = sample_titles[[item]]))
+  
   obj <- subset(obj,
                 subset = 
                   nCount_RNA < nCount_RNA_max[[item]] &
                   nCount_RNA > nCount_RNA_min[[item]] &
                   percent.mt < mt_max[[item]])
-  
-  assign(sample_titles[[item]], obj) #makes each sample an individual Seurat obj without overwriting
+  #make each sample an individual Seurat obj without overwriting
+  assign(sample_titles[[item]], obj)
 }
 ```
 
-Look at HSV transcripts vs mt transcripts and HSV transcripts vs nCounts.
+Look at HSV transcripts vs mt transcripts and HSV transcripts vs nCount.
 
 oHSV-treated sample:
 
@@ -136,13 +136,13 @@ Combination-treated sample:
 
 ```{r scatter_combo, fig.height=5, fig.width=10}
 plot1_hsv <- FeatureScatter(Combination,
-                        feature1 = "nCount_RNA",
-                        feature2 = "percent.hsv") +
+                            feature1 = "nCount_RNA",
+                            feature2 = "percent.hsv") +
   theme(legend.position="none")
 
 plot2_hsv <- FeatureScatter(Combination,
-                        feature1 = "percent.mt",
-                        feature2 = "percent.hsv") +
+                            feature1 = "percent.mt",
+                            feature2 = "percent.hsv") +
   theme(legend.position="none")
 
 plot1_hsv +
@@ -167,7 +167,7 @@ nCount_RNA_min <- c(3000,
                     3000)
 names(nCount_RNA_min) <- sample_names
 
-# set % mt genes (will come back to adjust after vlnplot made, start at 50)
+# set % mt genes
 # very high percent mt in tumor samples - caution
 mt_max <- c(20,
             25,
@@ -175,7 +175,7 @@ mt_max <- c(20,
             25)
 names(mt_max) <- sample_names
 
-# do not need to plot violin plot since completed this previously to determine the cutoffs used here.
+# Load Seurat objects and subset based on the above cutoffs
 for (item in sample_names) {
   obj <- tenx_load_qc(paste("/gpfs0/home2/gdrobertslab/lab/Counts/",
                             item,
@@ -185,53 +185,41 @@ for (item in sample_names) {
                       violin_plot = FALSE)
   
   obj <- subset(obj,
-                  subset = 
-                    nCount_RNA < nCount_RNA_max[[item]] &
-                    nCount_RNA > nCount_RNA_min[[item]] &
-                    percent.mt < mt_max[[item]])
+                subset = 
+                  nCount_RNA < nCount_RNA_max[[item]] &
+                  nCount_RNA > nCount_RNA_min[[item]] &
+                  percent.mt < mt_max[[item]])
   
   obj$treatment <- sample_labels[[item]]
   
   # Make each sample an individual Seurat obj without overwriting
   assign(sample_titles[[item]], obj)
 }
-
-# Create a list of seurat objects
-#seurat_samples <- list(Control,
-#                       oHSV,
-#                       Trabectedin,
-#                       Combination)
-# Correlate sample names and sample labels
-#names(seurat_samples) <- sample_names
-
-#save(seurat_samples,
-#     file = "raw_seurat_samples.RData")
 ```
 
 # Normalize and Process
 
 ```{r process, fig.height=3, fig.width=3}
-A673_hsv <- merge(Control,
-                   y = c(oHSV,
-                         Trabectedin,
-                         Combination),
-                   add.cell.ids = c("Control",
-                                    "oHSV",
-                                    "Trabectedin",
-                                    "Combination"),
-                   project = "Trabectedin plus HSV1716 in A673 - repeat")
+A673_hsv_rep1 <- merge(Control,
+                       y = c(oHSV,
+                             Trabectedin,
+                             Combination),
+                       add.cell.ids = c("Control",
+                                        "oHSV",
+                                        "Trabectedin",
+                                        "Combination"),
+                       project = "Trabectedin plus HSV1716 in A673 - repeat")
 
 #### Normalize, scale, process, cluster ####
-A673_hsv <- NormalizeData(A673_hsv) %>%
+A673_hsv_rep1 <- NormalizeData(A673_hsv_rep1) %>%
   ScaleData() %>%
   FindVariableFeatures()
 
 #### Variable Features ####
 # Use Elbow Plots to determine the PCs to use
-
-A673_hsv <- RunPCA(A673_hsv,
-                     features = VariableFeatures(object = A673_hsv))
-ElbowPlot(A673_hsv,
+A673_hsv_rep1 <- RunPCA(A673_hsv_rep1,
+                        features = VariableFeatures(object = A673_hsv_rep1))
+ElbowPlot(A673_hsv_rep1,
           ndims = 30)
 ```
 
@@ -325,25 +313,24 @@ Downsample so there is the same number of cells in each treatment group.
 
 ```{r downsample, fig.height=5, fig.width=10}
 # Subset the highest number that makes all treatment groups equal in cell number
-# subset # of cells from each ident of the seurat object 
-Idents(A673_hsv) <- A673_hsv$treatment
-A673_hsv_even <- subset(A673_hsv,
-                          downsample = table(A673_hsv$treatment) %>%
-                            min())
+Idents(A673_hsv_rep1) <- A673_hsv_rep1$treatment
+A673_hsv_rep1 <- subset(A673_hsv_rep1,
+                        downsample = table(A673_hsv_rep1$treatment) %>%
+                          min())
 
-# Check that worked (should be 348)
-## extract meta data for group numbers
+# Check that worked - all treatment groups should have same cell number
+## Extract meta data
 library(data.table)
 A673_hsv_even.d <- A673_hsv_even@meta.data %>%
   as.data.table
 
-# the resulting md object has one "row" per cell
+## Resulting table has one "row" per cell - count
 A673_hsv_even.d[, .N, by = "treatment"]
 
+# Plot
 DimPlot(A673_hsv_even,
         split.by = "treatment") +
   coord_fixed()
-
 ```
 
 # oHSV Analysis
