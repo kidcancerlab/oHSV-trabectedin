@@ -313,6 +313,8 @@ Downsample so there is the same number of cells in each treatment group.
 
 ```{r downsample, fig.height=5, fig.width=10}
 # Subset the highest number that makes all treatment groups equal in cell number
+## Set seed to ensure reproducible results
+set.seed(888)
 Idents(A673_hsv_rep1) <- A673_hsv_rep1$treatment
 A673_hsv_rep1 <- subset(A673_hsv_rep1,
                         downsample = table(A673_hsv_rep1$treatment) %>%
