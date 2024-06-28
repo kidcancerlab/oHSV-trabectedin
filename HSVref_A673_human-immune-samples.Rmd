@@ -31,6 +31,7 @@ library(rrrSingleCellUtils)
 library(ggplot2)
 library(patchwork)
 source("scSeurat-addhsv.R")
+
 # Set the random generator seed so that results are reproducible.
 set.seed(153)
 
@@ -52,6 +53,7 @@ sample_labels <- c("1 - Control",
                    "2 - oHSV",
                    "3 - Trabectedin",
                    "4 - oHSV+Trabectedin")
+
 # correlate sample names and sample labels
 names(sample_labels) <- sample_names
 
@@ -101,7 +103,7 @@ for (item in sample_names) {
                   nCount_RNA < nCount_RNA_max[[item]] &
                   nCount_RNA > nCount_RNA_min[[item]] &
                   percent.mt < mt_max[[item]])
-  #make each sample an individual Seurat obj without overwriting
+  # make each sample an individual Seurat obj without overwriting
   assign(sample_titles[[item]], obj) 
 }
 ```
@@ -168,15 +170,14 @@ nFeature_RNA_max <- list(8500,
                          8000)
 names(nFeature_RNA_max) <- sample_names
 
-# set % mt genes (will come back to adjust after vlnplot made, start at 50)
-# very high percent mt in tumor samples - caution
+# very high percent mt in tumor samples
 mt_max <- c(40,
             40,
             40,
             40)
 names(mt_max) <- sample_names
 
-# do not need to plot violin plot since completed this previously to determine the cutoffs used here.
+# Load Seurat objects and subset based on the above cutoffs
 for (item in sample_names) {
   obj <- tenx_load_qc(paste("/gpfs0/home2/gdrobertslab/lab/Counts/",
                             item,
@@ -191,29 +192,18 @@ for (item in sample_names) {
                   nCount_RNA < nCount_RNA_max[[item]] &
                   nCount_RNA > nCount_RNA_min[[item]] &
                   percent.mt < mt_max[[item]])
-  
+
   obj$treatment <- sample_labels[[item]]
-  
+
   # Make each sample an individual Seurat obj without overwriting
   assign(sample_titles[[item]], obj)
 }
-
-# Create a list of seurat objects
-#seurat_samples <- list(Control,
-#                       oHSV,
-#                       Trabectedin,
-#                       Combination)
-# Correlate sample names and sample labels
-#names(seurat_samples) <- sample_names
-
-#save(seurat_samples,
-#     file = "raw_seurat_samples.RData")
 ```
 
 # Normalize and Process
 
 ```{r process, fig.height=3, fig.width=3, dependson="load_final"}
-A673_hsv <- merge(Control,
+A673_hsv_rep2 <- merge(Control,
                   y = c(oHSV,
                         Trabectedin,
                         Combination),
@@ -224,16 +214,16 @@ A673_hsv <- merge(Control,
                   project = "Trabectedin plus HSV1716 in A673 - repeat")
 
 #### Normalize, scale, process, cluster ####
-A673_hsv <- NormalizeData(A673_hsv) %>%
+A673_hsv_rep2 <- NormalizeData(A673_hsv_rep2) %>%
   ScaleData() %>%
   FindVariableFeatures()
 
 #### Variable Features ####
 # Use Elbow Plots to determine the PCs to use
 
-A673_hsv <- RunPCA(A673_hsv,
-                   features = VariableFeatures(object = A673_hsv))
-ElbowPlot(A673_hsv,
+A673_hsv_rep2 <- RunPCA(A673_hsv_rep2,
+                   features = VariableFeatures(object = A673_hsv_rep2))
+ElbowPlot(A673_hsv_rep2,
           ndims = 30)
 # Clean up environment
 rm(Control, oHSV, Trabectedin, Combination)
@@ -243,11 +233,11 @@ rm(Control, oHSV, Trabectedin, Combination)
 
 #### Res0.1
 ```{r umap, fig.height=5, fig.width=10, dependson=c("load_final","process")}
-A673_hsv <- FindNeighbors(A673_hsv, dims = 1:9) %>%
+A673_hsv_rep2 <- FindNeighbors(A673_hsv_rep2, dims = 1:9) %>%
   FindClusters(resolution = 0.1) %>%
   RunUMAP(dims = 1:9)
 
-DimPlot(A673_hsv,
+DimPlot(A673_hsv_rep2,
         reduction = "umap",
         split.by = "treatment",
         pt.size = 1,
@@ -257,11 +247,11 @@ DimPlot(A673_hsv,
 
 #### Res0.2
 ```{r, umap2, fig.height=5, fig.width=10, dependson=c("load_final","process")}
-A673_hsv <- FindClusters(A673_hsv,
+A673_hsv_rep2 <- FindClusters(A673_hsv_rep2,
                          resolution = 0.2) %>%
   RunUMAP(dims = 1:9)
 
-DimPlot(A673_hsv,
+DimPlot(A673_hsv_rep2,
         reduction = "umap",
         split.by = "treatment",
         pt.size = 1,
@@ -271,11 +261,11 @@ DimPlot(A673_hsv,
 
 #### Res0.3
 ```{r, umap3, fig.height=5, fig.width=10, dependson=c("load_final","process")}
-A673_hsv <- FindClusters(A673_hsv,
+A673_hsv_rep2 <- FindClusters(A673_hsv_rep2,
                          resolution = 0.3) %>%
   RunUMAP(dims = 1:9)
 
-DimPlot(A673_hsv,
+DimPlot(A673_hsv_rep2,
         reduction = "umap",
         split.by = "treatment",
         pt.size = 1,
@@ -290,26 +280,26 @@ Downsample so there is the same number of cells in each treatment group.
 ```{r downsample, fig.height=5, fig.width=10, dependson=c("load_final","process","umap")}
 # Subset the highest number that makes all treatment groups equal in cell number
 # subset # of cells from each ident of the seurat object 
-Idents(A673_hsv) <- A673_hsv$treatment
-A673_hsv_even <- subset(A673_hsv,
-                        downsample = table(A673_hsv$treatment) %>%
+Idents(A673_hsv_rep2) <- A673_hsv_rep2$treatment
+A673_hsv_rep2_even <- subset(A673_hsv_rep2,
+                        downsample = table(A673_hsv_rep2$treatment) %>%
                           min())
 
 # Check that worked (should be 348)
 ## extract meta data for group numbers
 library(data.table)
-A673_hsv_even.d <- A673_hsv_even@meta.data %>%
+A673_hsv_rep2_even.d <- A673_hsv_rep2_even@meta.data %>%
   as.data.table
 
 # the resulting md object has one "row" per cell
-A673_hsv_even.d[, .N, by = "treatment"]
+A673_hsv_rep2_even.d[, .N, by = "treatment"]
 
-DimPlot(A673_hsv_even,
+DimPlot(A673_hsv_rep2_even,
         split.by = "treatment") +
   coord_fixed()
 
 # Clean up envrionment 
-rm(A673_hsv)
+rm(A673_hsv_rep2)
 ```
 
 
@@ -317,8 +307,8 @@ rm(A673_hsv)
 
 Differentially Expressed Genes by Cluster (res0.3):
 ```{r deg, dependson=c("load_final","process","umap","downsample")}
-Idents(A673_hsv_even) <- A673_hsv_even$RNA_snn_res.0.2
-A673_hsv_markers <- FindAllMarkers(A673_hsv_even,
+Idents(A673_hsv_rep2_even) <- A673_hsv_rep2_even$RNA_snn_res.0.2
+A673_hsv_rep2_markers <- FindAllMarkers(A673_hsv_rep2_even,
                                    min.pct = 0.25,
                                    logfc.threshold = 0.25,
                                    only.pos = T)
@@ -328,7 +318,7 @@ A673_hsv_markers <- FindAllMarkers(A673_hsv_even,
 
 # Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
 # Print top 10 in each cluster
-A673_hsv_markers %>%
+A673_hsv_rep2_markers %>%
   group_by(cluster) %>%
   top_n(n = 10, wt = avg_log2FC) -> t
 
@@ -370,7 +360,7 @@ library(SingleCellExperiment)
 
 
 # Convert the Seurat object to a SCE object
-A673_hsv_even_sce <- as.SingleCellExperiment(A673_hsv_even)
+A673_hsv_rep2_even_sce <- as.SingleCellExperiment(A673_hsv_rep2_even)
 
 
 # Load the mouse reference library & immune-specific mouse data
@@ -378,19 +368,19 @@ ref1 <- MouseRNAseqData()
 ref2 <- ImmGenData()
 
 # Make cell type predictions using SingleR
-Tumor_hsv_pred_types <- SingleR(test = A673_hsv_even_sce,
+Tumor_hsv_pred_types <- SingleR(test = A673_hsv_rep2_even_sce,
                                 ref = list(ref1,
                                            ref2),
                                 labels = list(ref1$label.main,
                                               ref2$label.main))
 
 # Clean up environment
-rm(A673_hsv_even_sce, ref1, ref2)
+rm(A673_hsv_rep2_even_sce, ref1, ref2)
 ```
 
 ```{r singler_cont, dependson=c("load_final","process","umap","downsample","singlr")}
 # Transfer labels back to the Seurat object and plot
-A673_hsv_even$singleR2 <- Tumor_hsv_pred_types$labels
+A673_hsv_rep2_even$singleR2 <- Tumor_hsv_pred_types$labels
 
 maxv <- apply(Tumor_hsv_pred_types$scores, 
               MARGIN = 1, 
@@ -399,9 +389,9 @@ maxv <- apply(Tumor_hsv_pred_types$scores,
 hist(maxv,
      n = 200)
 
-A673_hsv_even$singleRscore <- maxv  #scores may be a matrix
+A673_hsv_rep2_even$singleRscore <- maxv  #scores may be a matrix
 
-as.data.frame(A673_hsv_even@meta.data) %>%
+as.data.frame(A673_hsv_rep2_even@meta.data) %>%
   as_tibble() %>%
   ggplot(aes(x = singleRscore)) +
   geom_histogram(bins = 200) +
@@ -409,14 +399,14 @@ as.data.frame(A673_hsv_even@meta.data) %>%
              ncol = 3,
              scales = "free_y") #****
              
-table(A673_hsv_even$singleR2,
-      A673_hsv_even$treatment)
+table(A673_hsv_rep2_even$singleR2,
+      A673_hsv_rep2_even$treatment)
 ```
 
 ```{r singlr_plot, dependson=c("load_final","process","umap","downsample","singlr")}
-Idents(A673_hsv_even) <- A673_hsv_even$singleR2 
+Idents(A673_hsv_rep2_even) <- A673_hsv_rep2_even$singleR2 
 
-DimPlot(A673_hsv_even,
+DimPlot(A673_hsv_rep2_even,
         reduction = "umap",
         pt.size = 0.5,
         label = T,
@@ -426,7 +416,7 @@ DimPlot(A673_hsv_even,
 ```
 
 ```{r singlr_plot2, fig.width=12, fig.height=5, dependson= c("load_final","process","umap","downsample","singlr")}
-DimPlot(A673_hsv_even,
+DimPlot(A673_hsv_rep2_even,
         reduction = "umap",
         pt.size = 0.5,
         label = T,
@@ -442,7 +432,7 @@ DimPlot(A673_hsv_even,
 # Find head/prefix ^HSV1 in all genes (rownames) of tumor object
 # Output is a vector of genes beginning with HSV1 that were found in the data:
 
-hsv <- str_subset(row.names(A673_hsv_even),
+hsv <- str_subset(row.names(A673_hsv_rep2_even),
                   pattern = "^HSV1")
 ```
 
@@ -472,7 +462,7 @@ A closer look at HSV transcript presence in the data.
 ```{r matthelp_assaydata, dependson =  c("load_final","process","umap","downsample","matthelp_hsvgenes")}
 #Make a compressed matrix of HSV1 genes as rownames and 
 #the corresponding single cell data for each gene (getassaydata is scaled data)
-assay.data <- GetAssayData(A673_hsv_even[hsv])
+assay.data <- GetAssayData(A673_hsv_rep2_even[hsv])
 
 # Rownames of compressed matrix (assay.data) should be the genes from 
 # the subset of genes above (hsv <- str_subset)
@@ -481,7 +471,7 @@ assay.data <- GetAssayData(A673_hsv_even[hsv])
 # Make a numeric vector of the column sums 
 assay_col <- colSums(assay.data)
 
-assay_col_unscaled <- GetAssayData(A673_hsv_even[hsv], ) %>%
+assay_col_unscaled <- GetAssayData(A673_hsv_rep2_even[hsv], ) %>%
   colSums()
 
 (assay_col > 0) %>%
@@ -514,11 +504,11 @@ tibble(cell_sum = assay_col) %>%
 
 Given that this new analysis better captures viral presence, it is added to the tumor data as metadata. The UMAP distribution of oHSV transcripts is shown. 
 ```{r new_hsv_meta, dependson = c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata")}
-A673_hsv_even <- AddMetaData(A673_hsv_even,
+A673_hsv_rep2_even <- AddMetaData(A673_hsv_rep2_even,
                              assay_col,
                              col.name = "oHSV_abundance")
 
-A673_hsv_even <- AddMetaData(A673_hsv_even,
+A673_hsv_rep2_even <- AddMetaData(A673_hsv_rep2_even,
                              assay_col > 0,
                              col.name = "oHSV_presence")
 ```
@@ -527,25 +517,25 @@ A673_hsv_even <- AddMetaData(A673_hsv_even,
 
 ```{r hsvdimplot, fig.height=5, fig.width=10, dependson = c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 
-Idents(A673_hsv_even) <- A673_hsv_even$oHSV_presence
+Idents(A673_hsv_rep2_even) <- A673_hsv_rep2_even$oHSV_presence
 
 # Change identities from TRUE/FALSE to infected/uninfected 
-A673_hsv_even <- RenameIdents(A673_hsv_even, 
+A673_hsv_rep2_even <- RenameIdents(A673_hsv_rep2_even, 
                               c("TRUE" = "oHSV+", 
                                 "FALSE" = "oHSV-"))
 
 # Reorder identity levels for more clear plotting of oHSV+ cells
-A673_hsv_even$oHSV_presence <- factor(A673_hsv_even$oHSV_presence,
+A673_hsv_rep2_even$oHSV_presence <- factor(A673_hsv_rep2_even$oHSV_presence,
                                       levels = c("oHSV+",
                                                  "oHSV-"))
 
-DimPlot(A673_hsv_even,
+DimPlot(A673_hsv_rep2_even,
         pt.size = 0.5,
         order = T) +
   ggtitle("oHSV Transcript Presence") +
   coord_fixed()
 
-DimPlot(A673_hsv_even,
+DimPlot(A673_hsv_rep2_even,
         pt.size = 0.5,
         split.by = "treatment",
         order = T) +
@@ -557,10 +547,10 @@ DimPlot(A673_hsv_even,
 ```{r numbers, dependson= c("process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 ## extract meta data for group numbers
 library(data.table)
-A673_hsv_even_dt <- A673_hsv_even@meta.data %>% 
+A673_hsv_rep2_even_dt <- A673_hsv_rep2_even@meta.data %>% 
   as.data.table
 # the resulting md object has one "row" per cell
-A673_hsv_even_dt[,
+A673_hsv_rep2_even_dt[,
                  .N, 
                  by = c("treatment", 
                         "oHSV_presence")]
@@ -569,7 +559,7 @@ A673_hsv_even_dt[,
 ### FeaturePlots: oHSV abundance 
 
 ```{r featurehsv, dependson = c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
-FeaturePlot(A673_hsv_even,
+FeaturePlot(A673_hsv_rep2_even,
             features = "oHSV_abundance",
             order = TRUE) +
   theme(aspect.ratio = 1)
@@ -577,7 +567,7 @@ FeaturePlot(A673_hsv_even,
 
 **Split by treatment group**
 ```{r feature_trt_hsv, fig.height = 3, fig.width = 12, dependson = c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
-FeaturePlot(A673_hsv_even,
+FeaturePlot(A673_hsv_rep2_even,
             split.by="treatment",
             features = "oHSV_abundance",
             order = TRUE) +
@@ -589,7 +579,7 @@ FeaturePlot(A673_hsv_even,
 
 ```{r feature_trt_hsv_100, fig.height = 3, fig.width = 12, dependson = c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 # Max cutoff at 100
-FeaturePlot(A673_hsv_even,
+FeaturePlot(A673_hsv_rep2_even,
             split.by="treatment",
             features = "oHSV_abundance",
             order = TRUE,
@@ -602,7 +592,7 @@ FeaturePlot(A673_hsv_even,
 
 ```{r feature_trt_hsv_50, fig.height = 3, fig.width = 12, dependson = c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 # Max cutoff at 50
-FeaturePlot(A673_hsv_even,
+FeaturePlot(A673_hsv_rep2_even,
             split.by="treatment",
             features = "oHSV_abundance",
             order = TRUE,
@@ -615,7 +605,7 @@ FeaturePlot(A673_hsv_even,
 
 ```{r feature_trt_hsv_20, fig.height = 3, fig.width = 12, dependson = c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 # Max cutoff at 50
-FeaturePlot(A673_hsv_even,
+FeaturePlot(A673_hsv_rep2_even,
             split.by="treatment",
             features = "oHSV_abundance",
             order = TRUE,
@@ -628,13 +618,13 @@ FeaturePlot(A673_hsv_even,
 oHSV abundance is shown below across treatment groups, as well as by cluster and treatment groups. 
 
 ```{r vlnhsv, dependson = c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
-Idents(A673_hsv_even) <- A673_hsv_even$treatment
+Idents(A673_hsv_rep2_even) <- A673_hsv_rep2_even$treatment
 
-VlnPlot(A673_hsv_even,
+VlnPlot(A673_hsv_rep2_even,
         features = "oHSV_abundance",
         split.by = "treatment")
 
-VlnPlot(A673_hsv_even,
+VlnPlot(A673_hsv_rep2_even,
         features = "oHSV_abundance",
         split.by = "treatment",
         group.by = "seurat_clusters")
@@ -700,18 +690,18 @@ names(hsv_timepoints) <- timepoints
 
 for (hsv_time in names(hsv_timepoints)) {
   # Add timepoint data as module score
-  A673_hsv_even <- AddModuleScore(A673_hsv_even,
+  A673_hsv_rep2_even <- AddModuleScore(A673_hsv_rep2_even,
                                   features = list(hsv_timepoints[[hsv_time]]),
                                   ctrl = 5,
                                   name = hsv_time)
   
   # Rename AddModuleScore naming syntax
-  colnames(A673_hsv_even@meta.data)[which(names(A673_hsv_even@meta.data) == 
+  colnames(A673_hsv_rep2_even@meta.data)[which(names(A673_hsv_rep2_even@meta.data) == 
                                             paste0(hsv_time, "1"))] <- hsv_time
   
   # Create FeaturePlots based on the timepoint module scores
   hsv_timepoints[["plots"]][[paste0(hsv_time, "_plot")]] <- 
-    FeaturePlot(A673_hsv_even,
+    FeaturePlot(A673_hsv_rep2_even,
                 features = hsv_time,
                 split.by = "treatment",
                 order = TRUE,
@@ -722,7 +712,7 @@ for (hsv_time in names(hsv_timepoints)) {
   
   # Create FeaturePlots based on the timepoint module scores
   hsv_timepoints[["plots"]][[paste0(hsv_time, "_plot_cutoff15")]] <- 
-    FeaturePlot(A673_hsv_even,
+    FeaturePlot(A673_hsv_rep2_even,
                 features = hsv_time,
                 split.by = "treatment",
                 order = TRUE,
@@ -731,7 +721,7 @@ for (hsv_time in names(hsv_timepoints)) {
     theme(aspect.ratio = 1)
   
   hsv_timepoints[["plots"]][[paste0(hsv_time, "_plot_cutoff1")]] <- 
-    FeaturePlot(A673_hsv_even,
+    FeaturePlot(A673_hsv_rep2_even,
                 features = hsv_time,
                 split.by = "treatment",
                 order = TRUE,
@@ -741,7 +731,7 @@ for (hsv_time in names(hsv_timepoints)) {
 }
 
 
-save(A673_hsv_even, file  = "Data/tumor-immune-A673_hsv_even-labeled.RData")
+save(A673_hsv_rep2_even, file  = "Data/tumor-immune-A673_hsv_rep2_even-labeled.RData")
 ```
 
 ```{r hsv_patchwork_cutoff15, fig.height = 12, fig.width = 16, dependson=  c("load_final","process","umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta","hsv_timepoints")}
