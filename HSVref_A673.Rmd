@@ -1,6 +1,6 @@
 ---
 title: "A673 tumor only scRNAseq with HSV reference"
-author: "Emily Franz"
+author: "Emily Ringwalt"
 date: "`r format(Sys.time(), '%m/%d/%Y')`"
 output: 
   html_document:
@@ -31,18 +31,13 @@ library(rrrSingleCellUtils)
 library(ggplot2)
 library(patchwork)
 source("scSeurat-addhsv.R")
+
 # Set the random generator seed so that results are reproducible.
 set.seed(888)
 
-# Create files for saving if do not exist
+# Create file for saving if do not exist
 if(!file.exists("Data")){
   dir.create("Data")
-}
-if(!file.exists("Plots")){
-  dir.create("Plots")
-}
-if(!file.exists("Plots/A673_1")){
-  dir.create("Plots/A673_1")
 }
 ```
 
@@ -228,7 +223,7 @@ ElbowPlot(A673_hsv_rep1,
 #### Res0.1
 ```{r umap, fig.height=5, fig.width=10}
 A673_hsv <- FindNeighbors(A673_hsv, dims = 1:13) %>%
-FindClusters(resolution = 0.1) %>%
+  FindClusters(resolution = 0.1) %>%
   RunUMAP(dims = 1:13)
 
 DimPlot(A673_hsv,
@@ -242,7 +237,7 @@ DimPlot(A673_hsv,
 #### Res0.2
 ```{r, umap2, fig.height=5, fig.width=10}
 A673_hsv <- FindClusters(A673_hsv,
-                           resolution = 0.2) %>%
+                         resolution = 0.2) %>%
   RunUMAP(dims = 1:13)
 
 DimPlot(A673_hsv,
@@ -256,7 +251,7 @@ DimPlot(A673_hsv,
 #### Res0.3
 ```{r, umap3, fig.height=5, fig.width=10}
 A673_hsv <- FindClusters(A673_hsv,
-                           resolution = 0.3) %>%
+                         resolution = 0.3) %>%
   RunUMAP(dims = 1:13)
 
 DimPlot(A673_hsv,
