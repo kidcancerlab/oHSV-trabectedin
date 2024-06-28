@@ -195,6 +195,7 @@ for (item in sample_names) {
 # Normalize and Process
 
 ```{r process, fig.height=3, fig.width=3}
+#### Merge ####
 A673_hsv_rep1 <- merge(Control,
                        y = c(oHSV,
                              Trabectedin,
@@ -262,6 +263,7 @@ DimPlot(A673_hsv_rep1,
   coord_fixed()
 ```
 
+# Downsample
 Downsample so there is the same number of cells in each treatment group.
 
 ```{r downsample, fig.height=5, fig.width=10}
