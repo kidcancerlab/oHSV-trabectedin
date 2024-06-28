@@ -203,6 +203,7 @@ for (item in sample_names) {
 # Normalize and Process
 
 ```{r process, fig.height=3, fig.width=3, dependson="load_final"}
+#### Merge ####
 A673_hsv_rep2 <- merge(Control,
                   y = c(oHSV,
                         Trabectedin,
@@ -220,11 +221,12 @@ A673_hsv_rep2 <- NormalizeData(A673_hsv_rep2) %>%
 
 #### Variable Features ####
 # Use Elbow Plots to determine the PCs to use
-
 A673_hsv_rep2 <- RunPCA(A673_hsv_rep2,
                    features = VariableFeatures(object = A673_hsv_rep2))
+
 ElbowPlot(A673_hsv_rep2,
           ndims = 30)
+
 # Clean up environment
 rm(Control, oHSV, Trabectedin, Combination)
 ```
@@ -279,21 +281,22 @@ Downsample so there is the same number of cells in each treatment group.
 
 ```{r downsample, fig.height=5, fig.width=10, dependson=c("load_final","process","umap")}
 # Subset the highest number that makes all treatment groups equal in cell number
-# subset # of cells from each ident of the seurat object 
+## Set seed to ensure reproducible results
 Idents(A673_hsv_rep2) <- A673_hsv_rep2$treatment
 A673_hsv_rep2_even <- subset(A673_hsv_rep2,
                         downsample = table(A673_hsv_rep2$treatment) %>%
                           min())
 
-# Check that worked (should be 348)
-## extract meta data for group numbers
+# Check that worked - all treatment groups should have same cell number
+## Extract meta data
 library(data.table)
 A673_hsv_rep2_even.d <- A673_hsv_rep2_even@meta.data %>%
   as.data.table
 
-# the resulting md object has one "row" per cell
+## Resulting table has one "row" per cell - count
 A673_hsv_rep2_even.d[, .N, by = "treatment"]
 
+# Plot
 DimPlot(A673_hsv_rep2_even,
         split.by = "treatment") +
   coord_fixed()
