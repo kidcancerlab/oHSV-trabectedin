@@ -222,11 +222,11 @@ ElbowPlot(A673_hsv_rep1,
 
 #### Res0.1
 ```{r umap, fig.height=5, fig.width=10}
-A673_hsv <- FindNeighbors(A673_hsv, dims = 1:13) %>%
+A673_hsv_rep1 <- FindNeighbors(A673_hsv_rep1, dims = 1:13) %>%
   FindClusters(resolution = 0.1) %>%
   RunUMAP(dims = 1:13)
 
-DimPlot(A673_hsv,
+DimPlot(A673_hsv_rep1,
         reduction = "umap",
         split.by = "treatment",
         pt.size = 1,
@@ -236,11 +236,11 @@ DimPlot(A673_hsv,
 
 #### Res0.2
 ```{r, umap2, fig.height=5, fig.width=10}
-A673_hsv <- FindClusters(A673_hsv,
-                         resolution = 0.2) %>%
+A673_hsv_rep1 <- FindClusters(A673_hsv_rep1,
+                              resolution = 0.2) %>%
   RunUMAP(dims = 1:13)
 
-DimPlot(A673_hsv,
+DimPlot(A673_hsv_rep1,
         reduction = "umap",
         split.by = "treatment",
         pt.size = 1,
@@ -250,11 +250,11 @@ DimPlot(A673_hsv,
 
 #### Res0.3
 ```{r, umap3, fig.height=5, fig.width=10}
-A673_hsv <- FindClusters(A673_hsv,
-                         resolution = 0.3) %>%
+A673_hsv_rep1 <- FindClusters(A673_hsv_rep1,
+                              resolution = 0.3) %>%
   RunUMAP(dims = 1:13)
 
-DimPlot(A673_hsv,
+DimPlot(A673_hsv_rep1,
         reduction = "umap",
         split.by = "treatment",
         pt.size = 1,
@@ -276,20 +276,20 @@ A673_hsv_rep1 <- subset(A673_hsv_rep1,
 # Check that worked - all treatment groups should have same cell number
 ## Extract meta data
 library(data.table)
-A673_hsv_even.d <- A673_hsv_even@meta.data %>%
+A673_hsv_rep1_even.d <- A673_hsv_rep1_even@meta.data %>%
   as.data.table
 
 ## Resulting table has one "row" per cell - count
-A673_hsv_even.d[, .N, by = "treatment"]
+A673_hsv_rep1_even.d[, .N, by = "treatment"]
 
 # Plot
-DimPlot(A673_hsv_even,
+DimPlot(A673_hsv_rep1_even,
         split.by = "treatment") +
   coord_fixed()
 
 # Save downsampled object
-save(A673_hsv_even,
-     file  = "Data/tumor-only-A673_hsv_even-labeled.RData")
+save(A673_hsv_rep1_even,
+     file  = "Data/tumor-only-A673_hsv_rep1_even-labeled.RData")
 ```
 
 ```{r}
