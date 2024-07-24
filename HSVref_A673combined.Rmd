@@ -167,8 +167,17 @@ DT::datatable(t,
 Downsample so there is the same number of cells in each treatment group.
 
 ```{r downsample, fig.height=5, fig.width=10}
+# Check that cell numbers in each treatment group are equal
+## Extract meta data
+library(data.table)
+A673_hsv_comb.d <- A673_hsv_comb@meta.data %>%
+  as.data.table
+## Resulting table has one "row" per cell - count
+AA673_hsv_comb.d[, .N, by = "treatment"]
+
 # Subset the highest number that makes all treatment groups equal in cell number
 # subset # of cells from each ident of the seurat object 
+set.seed(888)
 Idents(A673_hsv_comb) <- A673_hsv_comb$treatment
 A673_hsv_comb_even <- subset(A673_hsv_comb,
                           downsample = table(A673_hsv_comb$treatment) %>%
