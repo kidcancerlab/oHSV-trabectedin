@@ -271,9 +271,9 @@ Downsample so there is the same number of cells in each treatment group.
 ## Set seed to ensure reproducible results
 set.seed(888)
 Idents(A673_hsv_rep1) <- A673_hsv_rep1$treatment
-A673_hsv_rep1 <- subset(A673_hsv_rep1,
-                        downsample = table(A673_hsv_rep1$treatment) %>%
-                          min())
+A673_hsv_rep1_even <- subset(A673_hsv_rep1,
+                             downsample = table(A673_hsv_rep1$treatment) %>%
+                               min())
 
 # Check that worked - all treatment groups should have same cell number
 ## Extract meta data
