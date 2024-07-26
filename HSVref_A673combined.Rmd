@@ -59,16 +59,13 @@ lapply(my_dirs[file.exists(my_dirs) == FALSE], function(x) dir.create(x))
 
 ```{r process, fig.height=3, fig.width=3}
 # Load the two A673 datasets
-load("Data/tumor-only-A673_hsv_even-labeled.RData")
-tumor_only <- A673_hsv_even
-rm(A673_hsv_even)
-load("Data/tumor-immune-A673_hsv_even-labeled.RData")
-tumor_all <- A673_hsv_even
-rm(A673_hsv_even)
+load("Data/tumor-only-A673_hsv_rep1_even-labeled.RData")
+load("Data/tumor-immune-A673_hsv_rep2_even-labeled.RData")
 
+# Merge and process using rrrSingleCellUtils package
 A673_hsv_comb <-
-  merge(tumor_only,
-        tumor_all,
+  merge(A673_hsv_rep1_even,
+        A673_hsv_rep2_even,
         add.cell.ids = c("A673_tumoronly",
                          "A673_tumorall"),
         project = "Trabectedin plus HSV1716 in A673 Combined Datasets") %>%
@@ -77,6 +74,10 @@ A673_hsv_comb <-
 
 ElbowPlot(A673_hsv_comb,
           ndims = 30)
+
+# Remove individual objects once merged
+rm(A673_hsv_rep1_even)
+rm(A673_hsv_rep2_even)
 ```
 
 ### Clustering Resolution {.tabset}
@@ -185,12 +186,11 @@ A673_hsv_comb_even <- subset(A673_hsv_comb,
 
 # # the resulting object has one "row" per cell
 table(A673_hsv_comb$treatment) %>%
-  as.data.frame() # rename col
+  as.data.frame()
 
 DimPlot(A673_hsv_comb_even,
         split.by = "treatment") +
   coord_fixed()
-
 ```
 
 # oHSV Analysis
@@ -198,7 +198,6 @@ DimPlot(A673_hsv_comb_even,
 ```{r matthelp_hsvgenes, dependson = c("umap","downsample")}
 # Find head/prefix ^HSV1 in all genes (rownames) of tumor object
 # Output is a vector of genes beginning with HSV1 that were found in the data:
-
 hsv <- str_subset(row.names(A673_hsv_comb_even),
                   pattern = "^HSV1")
 ```
@@ -221,7 +220,6 @@ DT::datatable(hsv_dt,
                             'csv',
                             'excel')
               ))
-
 ```
 
 A closer look at HSV transcript presence in the data.
@@ -833,287 +831,11 @@ DotPlot(A673_hsv_comb_even,
 
 ## Gene List
 
-```{r antiviral_genes}
-# Set cell identites to presence of oHSV (TRUE or FALSE)
-Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$oHSV_presence
-
-# Subset the oHSV+ cells (TRUE)
-hsv_positive <- subset(A673_hsv_comb_even,
-                       idents = "TRUE")
-
-# Set cell identities to treatment group
-Idents(hsv_positive) <- hsv_positive$treatment
-
-# Generate dot plot of tumor intrinsic antiviral genes in oHSV+ cells
-# from treatment groups of interest
-antiviral_dot <- subset(hsv_positive,
-                        idents = c("2 - oHSV", "4 - oHSV+Trabectedin")) %>%
-  DotPlot(features = c("ISG15",
-                       "IFIT2",
-                       "ZC3HAV1",
-                       "MAFA",
-                       "DDX58",
-                       "IFIT3",
-                       "HELZ2",
-                       "IFITM3",
-                       "DDX3X",
-                       "EIF2AK2"),
-          #cols = c("lightgoldenrod", "darkred"),
-          cols = "Spectral",
-          scale = FALSE) +
-  RotatedAxis()
-
-pdf(file = "Plots/A673_comb/antiviral_dot.pdf",
-    height = 3,
-    width = 10)
-antiviral_dot
-dev.off()
-```
-
 ## Differential Gene Expression and Gene Set Enrichment Analysis
 
 Differential gene expression in combination compared to oHSV alone (gene list shown in the table below). GO and KEGG analyses are performed.
 
-```{r deg-trt}
-Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
-# maybe try with infected cells (what is changing in infected cells, not whole sample)
-trtdiff <- FindMarkers(A673_hsv_comb_even,
-                       ident.1 = "4 - oHSV+Trabectedin",
-                       ident.2 = "2 - oHSV",
-                       logfc.threshold = 0.15,
-                       only.pos = F) %>%
-  arrange(-abs(avg_log2FC))
-
-trtdiff <- as.data.frame(trtdiff)
-trtdiff <- arrange(trtdiff, desc(avg_log2FC))
-
-# Save for use in IPA
-write.csv(trtdiff,
-          file = "Data/A673_comb_trtdiff.csv")
-
-# Get into format used for GO
-degs <- as.vector(trtdiff$avg_log2FC)
-names(degs) <- rownames(trtdiff) %>%
-  str_replace("HSV1-","")
-degs
-```
-
-### GO
-
-```{r go, dependson='deg-trt', fig.height=10, fig.width=10}
-trt <- list()
-trt[["GO-BP"]] <- clusterProfiler::gseGO(
-  geneList = degs,
-  OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-  ont = "BP",
-  keyType = "SYMBOL",
-  nPermSimple = 10000,
-  eps = 0)
-
-trt[["GO-BP"]] <- mutate(trt[["GO-BP"]],
-      p.adjust = -log10(p.adjust))
-
-plots <- list()
-if (nrow(trt[["GO-BP"]]) > 0) {
-  plots[["GO-BP"]] <- enrichplot::dotplot(trt[["GO-BP"]],
-                                          x = "NES",
-                                          showCategory = 30,
-                                          font.size = 8,
-                                          color = "NES") +
-    labs(title = "Enrichment of Gene Sets in Combination Therapy",
-         subtitle = "GO-BP Gene Sets")
-} else {
-  plots[["GO-BP"]] <-
-    ggplot(tibble(x = "A", y = "A",
-                  text = "No significant hits"),
-           aes(x = x, y = y, label = text)) +
-    geom_text() +
-    theme(axis.text = element_text(size = 5)) +
-    labs(title = "Enrichment of Gene Sets in Combination Therapy",
-         subtitle = "GO-BP Gene Sets")
-}
-
-plots[["GO-BP"]]
-
-pdf("Plots/A673_comb/dotplot_gobp.pdf",
-    height = 8,
-    width = 8)
-plots[["GO-BP"]]
-dev.off()
-```
-
-### KEGG
-
-```{r kegg, dependson='deg-trt', fig.height=10, fig.width=10}
-conversion <-
-  clusterProfiler::bitr(geneID = names(degs),
-                        fromType = "SYMBOL",
-                        toType = "ENTREZID",
-                        OrgDb = "org.Hs.eg.db")
-
-keggdegs <-
-  as.data.frame(degs) %>%
-  rownames_to_column("SYMBOL") %>%
-  inner_join(conversion, by = "SYMBOL") %>%
-  pull(degs, name = ENTREZID)
-
-gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
-                                      organism = "hsa",
-                                      eps = 0,
-                                      pvalueCutoff = 1)
-gsea_KEGG <- mutate(gsea_KEGG,
-                    p.adjust = -log10(p.adjust))
-plots <- list()
-
-if (nrow(gsea_KEGG) > 0) {
-  
-  pdf("Plots/A673_comb/dotplot_kegg.pdf",
-      height = 8,
-      width = 8)
-  print(enrichplot::dotplot(gsea_KEGG,
-                            x = "NES",
-                            showCategory = 30,
-                            font.size = 8,
-                            color = "NES") +
-          labs(title = "Enrichment of Pathways in Combination Therapy",
-               subtitle = "KEGG Gene Sets from A673")
-  )
-  dev.off()
-  
-  # view in rmd
-  print(enrichplot::dotplot(gsea_KEGG,
-                            x = "NES",
-                            showCategory = 100,
-                            font.size = 8,
-                            color = "NES") +
-          labs(title = "Enrichment of Pathways in Combination Therapy",
-               subtitle = "KEGG Gene Sets from A673")
-  )
-  # Plot distribution of enrichment 
-  pdf("Plots/A673_comb/ridgeplot_kegg.pdf",
-      height = 8,
-      width = 8)
-  print(enrichplot::ridgeplot(gsea_KEGG,
-                              showCategory = 25,
-                              fill = "NES") +
-          labs(x = "Enrichment Distribution",
-               title = "Enrichment of Pathways in Combination Therapy",
-               subtitle = "KEGG Gene Sets from A673")
-  )
-  dev.off()
-
-  # view in rmd
-  print(enrichplot::ridgeplot(gsea_KEGG,
-                              showCategory = 25,
-                              fill = "NES") +
-          labs(x = "Enrichment Distribution",
-               title = "Enrichment of Pathways in Combination Therapy",
-               subtitle = "KEGG Gene Sets from A673")
-  )
-
-  # Plot overlap of enriched pathways
-  set.seed(888)
-  jc_gsea_KEGG <- enrichplot::pairwise_termsim(gsea_KEGG,
-                                               method = "JC",
-                                               semData = NULL,
-                                               showCategory = 200)
-  pdf("Plots/A673_comb/emapplot_kegg.pdf",
-      height = 8,
-      width = 8)
-  set.seed(88)
-  print(enrichplot::emapplot(jc_gsea_KEGG,
-                             showCategory	= 20,
-                             min_edge = 0.1,
-                             color = "NES",
-                             repel = FALSE,
-                             group_category = FALSE)
-  )
-  dev.off()
-
-} else {
-  print(ggplot(tibble(x = "A", y = "A",
-                      text = "No significant hits"),
-               aes(x = x, y = y, label = text)) +
-          geom_text() +
-          theme(axis.text = element_text(size = 5)) +
-          labs(title = "Enrichment of Pathways in Combination Therapy",
-               subtitle = "KEGG Gene Sets from A673")
-  )
-}
-
-# Look at GSEA enrichment for HSV pathway (hsa05168)
-enrichplot::gseaplot(gsea_KEGG,
-                     by = "all",
-                     title = "Herpes simplex virus 1 infection",
-                     geneSetID = "hsa05168")
-enrichplot::gseaplot2(gsea_KEGG,
-                     title = "Herpes simplex virus 1 infection",
-                     geneSetID = "hsa05168",
-                     pvalue_table = T,
-                     ES_geom = "dot")
-
-
-# annotate <- gsea_KEGG[i, c("NES", "pvalue", "p.adjust")]
-# label <- paste0(names(anno), "=",  round(anno, 3), collapse="\n")
-# 
-#     gsearank(edo2, i, edo2[i, 2]) + xlab(NULL) +ylab(NULL) +
-#         annotate("text", 10000, edo2[i, "enrichmentScore"] * .75, label = lab, hjust=0, vjust=0)
-# 
-# plot_grid(plotlist=pp, ncol=1)
-
-
-# y <- arrange(gsea_KEGG, abs(NES)) %>% 
-#   group_by(sign(NES)) %>% 
-#   slice(1:20)
-# print(y)
-# 
-# library(forcats)
-# library(ggplot2)
-# library(ggstance)
-# library(enrichplot)
-# 
-# ggplot(y, aes(NES, fct_reorder(Description, NES), fill=qvalues), showCategory=10) + 
-#     geom_col(orientation='y') + 
-#     scale_fill_continuous(low='red', high='blue', guide=guide_colorbar(reverse=TRUE)) + 
-#     theme_minimal() + ylab(NULL)
-
-print(gsea_KEGG["hsa05168"])
-
-# save as pdf
-pdf(file = "Plots/A673_comb/gsea_curve_hsv.pdf",
-    height = 8,
-    width = 8)
-enrichplot::gseaplot(gsea_KEGG,
-                     by = "all",
-                     title = "Herpes simplex virus 1 infection",
-                     geneSetID = "hsa05168")
-dev.off()
-
-# Map onto pathway
-gene <- names(keggdegs)[abs(keggdegs) > 0.25]
-gsea_enKEGG <- clusterProfiler::enrichKEGG(gene,
-                                           organism = "hsa")
-## Pull pathway to local
-browser <- clusterProfiler::browseKEGG(gsea_KEGG, 'hsa05168')
-
-## Plot expression onto pathway
-library(pathview)
-hsa05168 <- pathview(gene.data  = keggdegs,
-                     pathway.id = "hsa05168",
-                     species    = "hsa",
-                     limit      = list(gene=max(abs(keggdegs)), cpd=1))
-
-## convert gene ID to Symbol
-library(DOSE)
-gsea_KEGG_symbol <- setReadable(gsea_KEGG, 'org.Hs.eg.db', 'ENTREZID')
-
-gsea_KEGG_symbol2 <- pairwise_termsim(gsea_KEGG_symbol)
-
-# Treeplot
-treeplot(gsea_KEGG_symbol2, color = "NES")
-```
-
-## No logfc cutoff for DEG, GO, KEGG
+No logfc cutoff for DEG, GO, KEGG
 
 ```{r deg-trt-0, fig.height=10, fig.width=10}
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
@@ -1132,7 +854,7 @@ trtdiff <- arrange(trtdiff, desc(avg_log2FC))
 write.csv(trtdiff,
           file = "Data/A673_comb_trtdiff_nocutoff.csv")
 
-# Get into format used for GO
+# Get into correct format for KEGG
 degs <- as.vector(trtdiff$avg_log2FC)
 names(degs) <- rownames(trtdiff) %>%
   str_replace("HSV1-","")
@@ -1285,7 +1007,6 @@ save(gsea_KEGG,
      file = "Data/gsea_KEGG__A673_nocutoff.RData")
 ```
 
-
 ## Expression of Genes Enriched in KEGG HSV pathway
 
 ```{r hsvpath_exp}
@@ -1335,13 +1056,13 @@ FoldChange(A673_hsv_comb_even,
            ident.1 = "4 - oHSV+Trabectedin",
            ident.2 = "2 - oHSV",
            features = c("BIRC2",
-                       "BIRC3",
-                       "TYK2",
-                       "SOCS3",
-                       "JAK1",
-                       "JAK2",
-                       "EIF2AK2",
-                       "PPP1CA"))
+                        "BIRC3",
+                        "TYK2",
+                        "SOCS3",
+                        "JAK1",
+                        "JAK2",
+                        "EIF2AK2",
+                        "PPP1CA"))
 ```
 
 ```{r wholehsvpath_exp}
@@ -1363,176 +1084,12 @@ hsa05168_DEG <- FindMarkers(A673_hsv_comb_even,
 
 write.csv(hsa05168_DEG,
           file = "Data/A673_hsv_comb_even_hsa05168_DEG.csv")
-
-DotPlot(A673_hsv_comb_even,
-        features = c("EIF2AK2",
-                     "JAK1",
-                     "BIRC2",
-                     "BCL2",
-                     "PDIA3",
-                     "CALR",
-                     "SOCS3"),
-        group.by="treatment",
-        cols = "Spectral")
-```
-
-
-### GO and KEGG of infected cells only
-
-```{r infdeg-trt, fig.height=10, fig.width=10}
-# Subset HSV-infected cells
-Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$oHSV_presence 
-inf_A673_hsv_comb_even <- subset(A673_hsv_comb_even,
-                                 idents = "TRUE")
-
-# Find DEGs between combination and oHSV alone
-Idents(inf_A673_hsv_comb_even) <- inf_A673_hsv_comb_even$treatment 
-inf_trtdiff <- FindMarkers(inf_A673_hsv_comb_even,
-                           ident.1 = "4 - oHSV+Trabectedin",
-                           ident.2 = "2 - oHSV",
-                           logfc.threshold = 0,
-                           only.pos = F) %>%
-  arrange(-abs(avg_log2FC))
-
-inf_trtdiff <- as.data.frame(inf_trtdiff)
-inf_trtdiff <- arrange(inf_trtdiff, desc(avg_log2FC))
-inf_degs <- as.vector(inf_trtdiff$avg_log2FC)
-names(inf_degs) <- rownames(inf_trtdiff) %>%
-  str_replace("HSV1-","")
-inf_degs
-
-trt <- list()
-trt[["Inf_GO-BP"]] <- clusterProfiler::gseGO(
-  geneList = inf_degs,
-  OrgDb = org.Hs.eg.db::org.Hs.eg.db,
-  ont = "BP",
-  keyType = "SYMBOL",
-  nPermSimple = 10000,
-  eps = 0)
-
-trt[["Inf_GO-BP"]] <- mutate(trt[["Inf_GO-BP"]],
-      p.adjust = -log10(p.adjust))
-
-plots <- list()
-if (nrow(trt[["Inf_GO-BP"]]) > 0) {
-  plots[["Inf_GO-BP"]] <- enrichplot::dotplot(trt[["Inf_GO-BP"]],
-                                              x = "NES",
-                                              showCategory = 30,
-                                              font.size = 8,
-                                              color = "NES") +
-    labs(title = "Enrichment of Gene Sets in Infected Tumor Cells of Combination Therapy",
-         subtitle = "GO-BP Gene Sets")
-} else {
-  plots[["Inf_GO-BP"]] <-
-    ggplot(tibble(x = "A", y = "A",
-                  text = "No significant hits"),
-           aes(x = x, y = y, label = text)) +
-    geom_text() +
-    theme(axis.text = element_text(size = 5)) +
-    labs(title = "Enrichment of Gene Sets in Infected Tumor Cells of Combination Therapy",
-         subtitle = "GO-BP Gene Sets")
-}
-
-plots[["Inf_GO-BP"]]
-
-pdf("Plots/A673_comb/dotplot_gobp_inf.pdf",
-    height = 8,
-    width = 8)
-plots[["Inf_GO-BP"]]
-dev.off()
-```
-
-```{r infkegg, dependson='infdeg-trt'}
-conversion <-
-  clusterProfiler::bitr(geneID = names(inf_degs),
-                        fromType = "SYMBOL",
-                        toType = "ENTREZID",
-                        OrgDb = "org.Hs.eg.db")
-
-inf_keggdegs <-
-  as.data.frame(inf_degs) %>%
-  rownames_to_column("SYMBOL") %>%
-  inner_join(conversion, by = "SYMBOL") %>%
-  pull(inf_degs, name = ENTREZID)
-
-inf_gsea_KEGG <- clusterProfiler::gseKEGG(inf_keggdegs,
-                                      organism = "hsa",
-                                      eps = 0)
-inf_gsea_KEGG <- mutate(inf_gsea_KEGG,
-                        p.adjust = -log10(p.adjust))
-plots <- list()
-if (nrow(inf_gsea_KEGG) > 0) {
-  plots[["Inf_KEGG"]] <- enrichplot::dotplot(inf_gsea_KEGG,
-                                             x = "NES",
-                                             showCategory = 30,
-                                             font.size = 8,
-                                             color = "NES") +
-    labs(title = "Enrichment of Pathways in Infected Tumor Cells of Combination Therapy",
-         subtitle = "KEGG Gene Sets from A673")
-} else {
-  plots[["Inf_KEGG"]] <-
-    ggplot(tibble(x = "A", y = "A",
-                  text = "No significant hits"),
-           aes(x = x, y = y, label = text)) +
-    geom_text() +
-    theme(axis.text = element_text(size = 5)) +
-    labs(title = "Enrichment of Pathways in Infected Tumor Cells of Combination Therapy",
-         subtitle = "KEGG Gene Sets from A673")
-}
-
-plots[["Inf_KEGG"]]
-
-pdf("Plots/A673_comb/dotplot_kegg_inf.pdf",
-    height = 8,
-    width = 8)
-plots[["Inf_KEGG"]]
-dev.off()
-
-# Map onto pathway
-inf_gene <- names(inf_keggdegs)[abs(inf_keggdegs) > 0.25]
-inf_gsea_enKEGG <- clusterProfiler::enrichKEGG(inf_gene,
-                                           organism = "hsa")
-
-clusterProfiler::browseKEGG(inf_gsea_KEGG, 'hsa05168')
-
-#         setSize enrichmentScore        NES       pvalue     p.adjust
-#hsa05168     197      -0.3347752 -0.9902869 5.502008e-01  0.16305080
-
-# enrichplot::gseaplot2(inf_gsea_KEGG,
-#                       title = "Herpes simplex virus 1 infection",
-#                       geneSetID = "hsa05168",
-#                       pvalue_table = T)
-
-#gsea curve
-enrichplot::gseaplot(inf_gsea_KEGG,
-                     by = "all",
-                     title = "Herpes simplex virus 1 infection",
-                     geneSetID = "hsa05168")
-
-library("pathview")
-inf_hsa05168 <- pathview(gene.data  = inf_keggdegs,
-                         pathway.id = "hsa05168",
-                         species    = "hsa",
-                         limit      = list(gene=max(abs(inf_keggdegs)), cpd=1))
-
-backconversion <-
-  clusterProfiler::bitr(geneID = gsea_KEGG[["hsa05168"]],
-                        fromType = "ENTREZID",
-                        toType = "SYMBOL",
-                        OrgDb = "org.Hs.eg.db")
-
-Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
-antiviralFC <- FoldChange(A673_hsv_comb_even,
-                          features = backconversion[["SYMBOL"]],
-                          ident.1 = "4 - oHSV+Trabectedin",
-                          ident.2 = "2 - oHSV") 
-antiviralFC[order(-antiviralFC$avg_log2FC),]
-
 ```
 
 ```{r hsvpath_infexp}
 antiviral_dot <- subset(hsv_positive,
-                        idents = c("2 - oHSV", "4 - oHSV+Trabectedin")) %>%
+                        idents = c("2 - oHSV",
+                                   "4 - oHSV+Trabectedin")) %>%
   DotPlot(features = c("BIRC2",
                        "BIRC3",
                        "TYK2",
@@ -1591,26 +1148,6 @@ DotPlot(A673_hsv_comb_even,
         cols = "Spectral",
         group.by = "treatment") +
   RotatedAxis()
-```
-
-### Table of Enriched GO pathways
-
-```{r gobp, dependson="deg-trt"}
-# Create interactive datatable showing DEG list
-gobp <- as.data.table(trt[["GO-BP"]])
-DT::datatable(gobp,
-              rownames = TRUE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 10,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
 ```
 
 # EWS-FLI targets
