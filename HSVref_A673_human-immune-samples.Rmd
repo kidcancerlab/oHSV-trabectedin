@@ -184,7 +184,7 @@ for (item in sample_names) {
                             "/filtered_feature_bc_matrix/",
                             sep = ""),
                       species_pattern = "^hg19_|^mm10_",
-                      mixed_hsv = "TRUE",
+                      human_hsv = "TRUE",
                       violin_plot = FALSE)
   
   obj <- subset(obj,
