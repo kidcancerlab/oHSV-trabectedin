@@ -57,7 +57,7 @@ lapply(my_dirs[file.exists(my_dirs) == FALSE], function(x) dir.create(x))
 
 ## Normalize and Process
 
-```{r process, fig.height=3, fig.width=3}
+```{r process, fig.height=3, fig.width=3, dependson="load_final"}
 # Load the two A673 datasets
 load("Data/tumor-only-A673_hsv_rep1_even-labeled.RData")
 load("Data/tumor-immune-A673_hsv_rep2_even-labeled.RData")
@@ -84,7 +84,7 @@ rm(A673_hsv_rep2_even)
 
 #### Res0.1
 
-```{r umap, fig.height=5, fig.width=10}
+```{r umap, fig.height=5, fig.width=10, dependson=c("load_final","process")}
 DimPlot(A673_hsv_comb,
         reduction = "umap",
         split.by = "treatment",
@@ -95,7 +95,7 @@ DimPlot(A673_hsv_comb,
 
 #### Res0.2
 
-```{r, umap2, fig.height=5, fig.width=10}
+```{r umap2, fig.height=5, fig.width=10, dependson="umap"}
 A673_hsv_comb <- FindClusters(A673_hsv_comb,
                            resolution = 0.2)
 
@@ -109,7 +109,7 @@ DimPlot(A673_hsv_comb,
 
 #### Res0.3
 
-```{r, umap3, fig.height=5, fig.width=10}
+```{r umap3, fig.height=5, fig.width=10, dependson="umap"}
 A673_hsv_comb <- FindClusters(A673_hsv_comb,
                            resolution = 0.3)
 
@@ -125,7 +125,7 @@ DimPlot(A673_hsv_comb,
 
 Differentially Expressed Genes by Cluster (res0.3):
 
-```{r deg}
+```{r deg, dependson=c("load_final","process","umap")}
 A673_hsv_comb_markers <- FindAllMarkers(A673_hsv_comb,
                                         min.pct = 0.25,
                                         logfc.threshold = 0.25,
@@ -167,7 +167,7 @@ DT::datatable(t,
 
 Check that there is the same number of cells in each treatment group.
 
-```{r downsample, fig.height=5, fig.width=10}
+```{r downsample, fig.height=5, fig.width=10, dependson=c("load_final","process","umap")}
 # Check that cell numbers in each treatment group are equal
 ## Extract meta data
 library(data.table)
@@ -185,7 +185,7 @@ rm(A673_hsv_comb)
 
 # oHSV Analysis
 
-```{r matthelp_hsvgenes, dependson = c("umap","downsample")}
+```{r matthelp_hsvgenes, dependson = c("load_final","process","umap","downsample")}
 # Find head/prefix ^HSV1 in all genes (rownames) of tumor object
 # Output is a vector of genes beginning with HSV1 that were found in the data:
 hsv <- str_subset(row.names(A673_hsv_comb_even),
@@ -194,7 +194,7 @@ hsv <- str_subset(row.names(A673_hsv_comb_even),
 
 **All oHSV Genes Present:**
 
-```{r hsv_genes, dependson = c("umap","downsample","matthelp_hsvgenes")}
+```{r hsv_genes, dependson = "matthelp_hsvgenes"}
 # Create interactive datatable showing hsv genes
 hsv_dt <- as.data.table(hsv)
 DT::datatable(hsv_dt, 
@@ -214,7 +214,7 @@ DT::datatable(hsv_dt,
 
 A closer look at HSV transcript presence in the data.
 
-```{r matthelp_assaydata, dependson = c("umap","downsample","matthelp_hsvgenes")}
+```{r matthelp_assaydata, dependson = "matthelp_hsvgenes"}
 #Make a compressed matrix of HSV1 genes as rownames and the corresponding single cell data for each gene (getassaydata is scaled data)
 assay.data <- GetAssayData(A673_hsv_comb_even[hsv])
 
@@ -233,7 +233,7 @@ assay_col_unscaled <- GetAssayData(A673_hsv_comb_even[hsv], ) %>%
 
 Distribution of HSV1 transcripts:
 
-```{r tibble_hist, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata")}
+```{r tibble_hist, dependson = c("matthelp_hsvgenes","matthelp_assaydata")}
 #Use tibble and ggplot to look at histogram distribution of HSV genes 
 tibble(cell_sum = assay_col) %>%
   ggplot(aes(cell_sum)) +
@@ -242,7 +242,7 @@ tibble(cell_sum = assay_col) %>%
 
 Log normalized distribution of HSV1 transcripts:
 
-```{r tibble_hist_log, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata")}
+```{r tibble_hist_log, dependson = c("matthelp_hsvgenes","matthelp_assaydata")}
 #log scale helps to separate out low expression values and zero. We add 0.000001 to make sure we don't have log(0) (equals infinity so algorithm will remove these values) but can still view all the data points. 
 tibble(cell_sum = assay_col) %>%
   ggplot(aes(cell_sum + 0.000001)) +
@@ -252,7 +252,7 @@ tibble(cell_sum = assay_col) %>%
 
 Given that this new analysis better captures viral presence, it is added to the tumor data as metadata. The UMAP distribution of oHSV transcripts is shown.
 
-```{r new_hsv_meta, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata")}
+```{r new_hsv_meta, dependson = c("matthelp_hsvgenes","matthelp_assaydata")}
 A673_hsv_comb_even <- AddMetaData(A673_hsv_comb_even,
                                assay_col,
                                col.name = "oHSV_abundance")
@@ -264,7 +264,7 @@ A673_hsv_comb_even <- AddMetaData(A673_hsv_comb_even,
 
 ### DimPlots: oHSV presence
 
-```{r hsvdimplot, fig.height=5, fig.width=10, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r hsvdimplot, fig.height=5, fig.width=10, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$oHSV_presence
 
@@ -296,7 +296,7 @@ dev.off()
 
 ### FeaturePlots: oHSV abundance
 
-```{r featurehsv, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r featurehsv, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 FeaturePlot(A673_hsv_comb_even,
             features = "oHSV_abundance",
             order = TRUE) +
@@ -305,7 +305,7 @@ FeaturePlot(A673_hsv_comb_even,
 
 **Split by treatment group**
 
-```{r feature_trt_hsv, fig.height = 3, fig.width = 12, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r feature_trt_hsv, fig.height = 3, fig.width = 12, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 FeaturePlot(A673_hsv_comb_even,
             split.by="treatment",
             features = "oHSV_abundance",
@@ -315,7 +315,7 @@ FeaturePlot(A673_hsv_comb_even,
 
 **Max Cutoff at 100**
 
-```{r feature_trt_hsv_100, fig.height = 3, fig.width = 12, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r feature_trt_hsv_100, fig.height = 3, fig.width = 12, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 # Max cutoff at 100
 FeaturePlot(A673_hsv_comb_even,
             split.by="treatment",
@@ -327,7 +327,7 @@ FeaturePlot(A673_hsv_comb_even,
 
 **Max Cutoff at 50**
 
-```{r feature_trt_hsv_50, fig.height = 3, fig.width = 12, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r feature_trt_hsv_50, fig.height = 3, fig.width = 12, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 # Max cutoff at 50
 FeaturePlot(A673_hsv_comb_even,
             split.by="treatment",
@@ -339,7 +339,7 @@ FeaturePlot(A673_hsv_comb_even,
 
 **Max Cutoff at 20**
 
-```{r feature_trt_hsv_20, fig.height = 3, fig.width = 12, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r feature_trt_hsv_20, fig.height = 3, fig.width = 12, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 # Max cutoff at 50
 FeaturePlot(A673_hsv_comb_even,
             split.by="treatment",
@@ -353,7 +353,7 @@ FeaturePlot(A673_hsv_comb_even,
 
 oHSV abundance is shown below across treatment groups, as well as by cluster and treatment groups.
 
-```{r hsv_ab, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r hsv_ab, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
 
 # Violin plots of HSV abundance
@@ -398,7 +398,7 @@ dev.off()
 ```
 
 #### Expression calculations
-```{r abundexp}
+```{r abundexp, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 #### Abundance ####
 tabl <- data.table("abund" = A673_hsv_comb_even@meta.data[["oHSV_abundance"]],
                    "trt" = A673_hsv_comb_even@meta.data[["treatment"]])
@@ -484,7 +484,7 @@ Early: "HSV1-UL23", "HSV1-UL29", "HSV1-UL50", "HSV1-UL2"
 
 Late: "HSV1-UL48", "HSV1-UL19", "HSV1-US6" (note: not present in our data), "HSV1-UL27", "HSV1-UL53", "HSV1-UL44", "HSV1-UL41"
 
-```{r hsv_timepoints, fig.height = 4, fig.width = 16, dependson = c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r hsv_timepoints, fig.height = 4, fig.width = 16, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 # Create lists of time points for HSV gene expression 
 imm_early <- list(c("HSV1-RL2",
                     "HSV1-RS1",
@@ -624,7 +624,7 @@ save(A673_hsv_comb_even,
      file  = "Data/tumor-only-A673_hsv_comb_even-labeled.RData")
 ```
 
-```{r hsv_patchwork_cutoff15, fig.height = 12, fig.width = 16}
+```{r hsv_patchwork_cutoff15, fig.height = 12, fig.width = 16, dependson = "hsv_timepoints"}
 hsv_patchwork_hi <- 
   (plots[["Immediate_Early_Genes_plot_cutoff15"]] / 
      plots[["Early_Genes_plot_cutoff15"]] / 
@@ -636,7 +636,7 @@ hsv_patchwork_hi
 
 ```
 
-```{r hsv_patchwork_cutoff1, fig.height = 12, fig.width = 16}
+```{r hsv_patchwork_cutoff1, fig.height = 12, fig.width = 16, dependson = "hsv_timepoints"}
 hsv_patchwork_lo <- 
   (plots[["Immediate_Early_Genes_plot_cutoff1"]] / 
      plots[["Early_Genes_plot_cutoff1"]] / 
@@ -648,7 +648,7 @@ hsv_patchwork_lo
 
 ```
 
-```{r hsv_vln, height = 15, width = 7}
+```{r hsv-vln, height = 15, width = 7, dependson = "hsv_timepoints"}
 for (hsv_time in names(hsv_timepoints)) {
 # Create Violin Plots based on the timepoint module scores
   plots[[paste0(hsv_time, "_vln")]] <- 
@@ -673,7 +673,7 @@ hsv_patchwork_vln <-
 hsv_patchwork_vln
 ```
 
-```{r hsv-vln, dependson="hsv_timepoints"}
+```{r hsv-vln2, dependson="hsv_timepoints"}
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
 
 VlnPlot(A673_hsv_comb_even,
@@ -690,7 +690,7 @@ VlnPlot(A673_hsv_comb_even,
 
 ```
 
-```{r height = 10, width = 10, dependson=c("umap","downsample","matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
+```{r hsv-dot, height = 10, width = 10, dependson = "hsv_timepoints"}
 # Set cell identities to treatment group
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
 
@@ -760,7 +760,7 @@ print(vln)
 dev.off()
 ```
 
-```{r timeexp}
+```{r timeexp, dependson = "hsv_timepoints"}
 # Isolate the time-related HSV genes found in the A673 data
 hsv_genes <- intersect(c(imm_early[[1]],
                          early[[1]],
@@ -787,7 +787,7 @@ Differential gene expression in combination compared to oHSV alone (gene list sh
 
 No logfc cutoff for DEG, GO, KEGG
 
-```{r deg-trt-0, fig.height=10, fig.width=10}
+```{r deg-trt-0, fig.height=10, fig.width=10, dependson = "hsv_timepoints"}
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
 # maybe try with infected cells (what is changing in infected cells, not whole sample)
 trtdiff <- FindMarkers(A673_hsv_comb_even,
@@ -960,7 +960,7 @@ save(gsea_KEGG,
 
 ## Expression of Genes Enriched in KEGG HSV pathway
 
-```{r hsvpath_exp}
+```{r hsvpath_exp, dependson = "deg-trt-0"}
 #5501 PPP1CC; protein phosphatase 1 catalytic subunit gamma [KO:K06269] [EC:3.1.3.16]
 #5500 PPP1CB; protein phosphatase 1 catalytic subunit beta [KO:K06269] [EC:3.1.3.16]
 #329 BIRC2; baculoviral IAP repeat containing 2 [KO:K16060]
@@ -1016,7 +1016,7 @@ FoldChange(A673_hsv_comb_even,
                         "PPP1CA"))
 ```
 
-```{r wholehsvpath_exp}
+```{r wholehsvpath_exp, dependson = "deg-trt-0"}
 # Generate list of all genes in the HSV1 pathway (hsa05168)
 hsa05168_genelist <- hsa05168$plot.data.gene[["labels"]]
 
@@ -1039,7 +1039,7 @@ write.csv(hsa05168_DEG,
 
 ### Table of DEGs
 
-```{r trtdiff, dependson="deg-trt"}
+```{r trtdiff, dependson = "deg-trt-0"}
 # Create interactive datatable showing DEG list
 #trtdiff <- as.data.table(trtdiff)
 DT::datatable(trtdiff, 
@@ -1061,7 +1061,7 @@ dev.off()
 #### Fold Changes for Genes from HSV1 KEGG Pathway
 Calculated for oHSV+Trab compared to oHSV alone. 
 
-```{r antiviraltbl, dependson=c("deg-trt","infkegg"), fig.width=20}
+```{r antiviraltbl, dependson = "deg-trt-0", fig.width=20}
 backconversion <-
   clusterProfiler::bitr(geneID = gsea_KEGG[["hsa05168"]],
                         fromType = "ENTREZID",
@@ -1098,7 +1098,8 @@ DotPlot(A673_hsv_comb_even,
 ```
 
 # EWS-FLI targets
-```{r ewsfli}
+Does trabectedin impact EWS-FLI related gene expression?
+```{r ewsfli, dependson = "downsample"}
 # upreg by ewsfli
 VlnPlot(A673_hsv_comb_even,
         features = c("NR0B1","GLI1","NKX2-2","PTCH","GAS1","CDK2","FOXM1"),
@@ -1122,6 +1123,6 @@ FoldChange(A673_hsv_comb_even,
 ```
 
 
-```{r}
+```{r sessioninfo}
 sessionInfo()
 ```
