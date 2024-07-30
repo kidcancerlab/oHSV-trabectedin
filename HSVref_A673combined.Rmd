@@ -33,19 +33,9 @@ library(data.table)
 library(enrichplot)
 source("scSeurat-addhsv.R")
 # Set the random generator seed so that results are reproducible.
-set.seed(888)
+set.seed(153)
 
-# Create files for saving if do not exist
-# if(!file.exists("Data")){
-#   dir.create("Data")
-# }
-# if(!file.exists("Plots")){
-#   dir.create("Plots")
-# }
-# if(!file.exists("Plots/A673_comb")){
-#   dir.create("Plots/A673_comb")
-# }
-
+# Create output directories as needed
 my_dirs <- c("Data",
              "Plots",
              "Plots/A673_comb")
@@ -57,7 +47,10 @@ lapply(my_dirs[file.exists(my_dirs) == FALSE], function(x) dir.create(x))
 
 ## Normalize and Process
 
-```{r process, fig.height=3, fig.width=3, dependson="load_final"}
+```{r process, fig.height=3, fig.width=3, dependson="lib"}
+# Set seed
+set.seed(888)
+
 # Load the two A673 datasets
 load("Data/tumor-only-A673_hsv_rep1_even-labeled.RData")
 load("Data/tumor-immune-A673_hsv_rep2_even-labeled.RData")
@@ -72,6 +65,7 @@ A673_hsv_comb <-
   process_seurat(resolution = 0.1,
                  run_umap_dims = 1:18)
 
+# use ElbowPlot to determine PC to include
 ElbowPlot(A673_hsv_comb,
           ndims = 30)
 
@@ -85,6 +79,7 @@ rm(A673_hsv_rep2_even)
 #### Res0.1
 
 ```{r umap, fig.height=5, fig.width=10, dependson=c("load_final","process")}
+# Use resolution of 0.1 from above
 DimPlot(A673_hsv_comb,
         reduction = "umap",
         split.by = "treatment",
@@ -133,21 +128,17 @@ A673_hsv_comb_markers <- FindAllMarkers(A673_hsv_comb,
 ```
 
 ```{r degt, dependson="deg"}
-
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
-# Print top 10 in each cluster
+# Isolate top 10 in each cluster
 A673_hsv_comb_markers %>%
   group_by(cluster) %>%
   top_n(n = 10, wt = avg_log2FC) -> t
 
-# Get dataframe into proper format  #need to pipe directly from 129 to 143
+# Get dataframe into proper format
 t <- as.data.frame(t)
 t$cluster <- as.numeric(as.character(t$cluster)) # mutate
 t <- t[order(t$cluster),] #arrange
 t <- t[,c(7, 1:6)] # relocate
 t <- t[,c(7, 1:6)] # relocate
-#could also use arrange() to sort by column
-# try using filter and select
 
 # Create interactive datatable showing top 10 DEG in each cluster 
 DT::datatable(t, 
