@@ -235,9 +235,9 @@ rm(Control, oHSV, Trabectedin, Combination)
 
 #### Res0.1
 ```{r umap, fig.height=5, fig.width=10, dependson=c("load_final","process")}
-A673_hsv_rep2 <- FindNeighbors(A673_hsv_rep2, dims = 1:15) %>%
+A673_hsv_rep2 <- FindNeighbors(A673_hsv_rep2, dims = 1:21) %>%
   FindClusters(resolution = 0.1) %>%
-  RunUMAP(dims = 1:15)
+  RunUMAP(dims = 1:21)
 
 DimPlot(A673_hsv_rep2,
         reduction = "umap",
@@ -251,7 +251,7 @@ DimPlot(A673_hsv_rep2,
 ```{r, umap2, fig.height=5, fig.width=10, dependson="umap"}
 A673_hsv_rep2 <- FindClusters(A673_hsv_rep2,
                          resolution = 0.2) %>%
-  RunUMAP(dims = 1:15)
+  RunUMAP(dims = 1:21)
 
 DimPlot(A673_hsv_rep2,
         reduction = "umap",
@@ -265,7 +265,7 @@ DimPlot(A673_hsv_rep2,
 ```{r, umap3, fig.height=5, fig.width=10, dependson="umap"}
 A673_hsv_rep2 <- FindClusters(A673_hsv_rep2,
                          resolution = 0.3) %>%
-  RunUMAP(dims = 1:15)
+  RunUMAP(dims = 1:21)
 
 DimPlot(A673_hsv_rep2,
         reduction = "umap",
