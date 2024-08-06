@@ -741,93 +741,6 @@ for (celltype in names(subsets)) {
 }
 ```
 
-Find and plot immune genes of interest 
-
-```{r granzymes, fig.height = 11,fig.width=9,dependson="anysubset2"}
-#Granzymes
-Idents(nk_t) <- nk_t$treatment
-nkt_markers <- FindMarkers(nk_t,
-                           ident.1 = "4 - oHSV+Trabectedin",
-                           ident.2 = "2 - oHSV",
-                           min.pct = 0,
-                           logfc.threshold = 0,
-                           features = c("Gzmd",
-                                        "Gzme",
-                                        "Gzmc",
-                                        "Gzmf",
-                                        "Gzmg",
-                                        "Gzma",
-                                        "Gzmb",
-                                        "Prf1",
-                                        "Xcl1"),
-                           only.pos = T) %>%
-  arrange(-abs(avg_log2FC)) %>%
-  as.data.frame()
-
-# Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(nkt_markers, 
-              rownames = FALSE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 15,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
-
-# Plot genes of interest
-VlnPlot(nk_t,
-        features = c("Gzmd",
-                     "Gzme",
-                     "Gzmc",
-                     "Gzmf",
-                     "Gzmd",
-                     "Gzma",
-                     "Gzmb",
-                     "Prf1",
-                     "Xcl1"),
-        log = T,
-        split.by = "treatment",
-        cols = c("grey", "darkblue", "orangered", "purple"))
-
-pdf("Plots/K7M2_2/nk_t-gzms.pdf",
-    height = 14,
-    width = 10)
-VlnPlot(nk_t,
-        features = c("Gzmd",
-                     "Gzme",
-                     "Gzmc",
-                     "Gzmf",
-                     "Gzmg",
-                     "Gzma",
-                     "Gzmb",
-                     "Prf1",
-                     "Xcl1"),
-        log = T,
-        split.by = "treatment",
-        cols = c("grey", "darkblue", "orangered", "purple"))
-dev.off()
-
-# Check fold change differences in trab. vs control
-FoldChange(nk_t,
-           ident.1 = "3 - Trabectedin",
-           ident.2 = "1 - Control",
-           features = c("Gzmd",
-                        "Gzme",
-                        "Gzmc",
-                        "Gzmf",
-                        "Gzmg",
-                        "Gzma",
-                        "Gzmb",
-                        "Prf1",
-                        "Xcl1")) %>%
-  print()
-```
-
 ### Death receptor signaling
 
 ```{r fig.height=4, fig.width=9}
@@ -1082,6 +995,93 @@ for (cell_id in levels(krecurlustered)) {
   }
   assign(cell_id, cell_type)
 }
+```
+
+Find and plot immune genes of interest 
+
+```{r granzymes, fig.height = 11,fig.width=9,dependson="anysubset2"}
+#Granzymes
+Idents(nk_t) <- nk_t$treatment
+nkt_markers <- FindMarkers(nk_t,
+                           ident.1 = "4 - oHSV+Trabectedin",
+                           ident.2 = "2 - oHSV",
+                           min.pct = 0,
+                           logfc.threshold = 0,
+                           features = c("Gzmd",
+                                        "Gzme",
+                                        "Gzmc",
+                                        "Gzmf",
+                                        "Gzmg",
+                                        "Gzma",
+                                        "Gzmb",
+                                        "Prf1",
+                                        "Xcl1"),
+                           only.pos = T) %>%
+  arrange(-abs(avg_log2FC)) %>%
+  as.data.frame()
+
+# Create interactive datatable showing top 10 DEG in each cluster 
+DT::datatable(nkt_markers, 
+              rownames = FALSE,
+              extensions = c('FixedColumns',
+                             'Buttons'),
+              options = list(
+                pageLength = 15,
+                scrollX = TRUE,
+                scrollCollapse = TRUE,
+                dom = 'Bfrtip',
+                buttons = c('copy',
+                            'csv',
+                            'excel')
+              ))
+
+# Plot genes of interest
+VlnPlot(nk_t,
+        features = c("Gzmd",
+                     "Gzme",
+                     "Gzmc",
+                     "Gzmf",
+                     "Gzmd",
+                     "Gzma",
+                     "Gzmb",
+                     "Prf1",
+                     "Xcl1"),
+        log = T,
+        split.by = "treatment",
+        cols = c("grey", "darkblue", "orangered", "purple"))
+
+pdf("Plots/K7M2_2/nk_t-gzms.pdf",
+    height = 14,
+    width = 10)
+VlnPlot(nk_t,
+        features = c("Gzmd",
+                     "Gzme",
+                     "Gzmc",
+                     "Gzmf",
+                     "Gzmg",
+                     "Gzma",
+                     "Gzmb",
+                     "Prf1",
+                     "Xcl1"),
+        log = T,
+        split.by = "treatment",
+        cols = c("grey", "darkblue", "orangered", "purple"))
+dev.off()
+
+# Check fold change differences in trab. vs control
+FoldChange(nk_t,
+           ident.1 = "3 - Trabectedin",
+           ident.2 = "1 - Control",
+           features = c("Gzmd",
+                        "Gzme",
+                        "Gzmc",
+                        "Gzmf",
+                        "Gzmg",
+                        "Gzma",
+                        "Gzmb",
+                        "Prf1",
+                        "Xcl1")) %>%
+  print()
 ```
 
 ```{r}
