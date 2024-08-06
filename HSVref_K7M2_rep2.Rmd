@@ -992,18 +992,6 @@ for (cell_id in levels(krecurlustered)) {
                         p.adjust = -log10(p.adjust))
     #### Plot ####
     if (nrow(gsea_KEGG) > 0) {
-      # Dotplot
-      keggplots[["KEGG_Dot"]][[cell_id]] <- 
-        enrichplot::dotplot(gsea_KEGG,
-                            x = "NES",
-                            showCategory = 25,
-                            font.size = 8,
-                            color = "NES") +
-        labs(title = "Enrichment of Pathways in Combination Therapy",
-             subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-      ## print in output
-      print(keggplots[["KEGG_Dot"]][[cell_id]])
-      
       # Bar plot
       keggplots[["KEGG_Bar"]][[cell_id]] <- 
         barplot.enrichResult(gsea_KEGG,
@@ -1065,21 +1053,21 @@ for (cell_id in levels(krecurlustered)) {
         theme(axis.text = element_text(size = 5)) +
         labs(title = "Enrichment of Pathways in Combination Therapy",
              subtitle = paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-      keggplots[["KEGG_Dot"]][[cell_id]] <- nohits
       keggplots[["KEGG_Bar"]][[cell_id]] <- nohits
       keggplots[["KEGG_Bar2"]][[cell_id]] <- nohits
       # print plots in output
       print(keggplots[["KEGG_Dot"]][[cell_id]])
     }
 
+    # Save plots as PDF
     pdf(paste0("Plots/K7M2_2/",
                cell_id,
-               "_KEGGenrichmentdot.pdf"),
+               "_KEGGenrichmentbar.pdf"),
         height = 6,
-        width = 8)
-    print(keggplots[["KEGG_Dot"]][[cell_id]])
+        width = 12)
+    print(keggplots[["KEGG_Bar"]][[cell_id]])
     dev.off()
-
+    
     pdf(paste0("Plots/K7M2_2/",
                cell_id,
                "_KEGGenrichmentbar2.pdf"),
@@ -1087,7 +1075,7 @@ for (cell_id in levels(krecurlustered)) {
         width = 12)
     print(keggplots[["KEGG_Bar2"]][[cell_id]])
     dev.off()
-
+    
   } else {
     # notify if a cell type has less than 20 cells (excluded from analyses)
     message("Insufficent cell number for ", cell_id)
