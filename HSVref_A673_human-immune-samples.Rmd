@@ -33,7 +33,7 @@ library(patchwork)
 source("scSeurat-addhsv.R")
 
 # Set the random generator seed so that results are reproducible.
-set.seed(153)
+set.seed(888)
 
 if(!file.exists("Data")){
   dir.create("Data")
@@ -153,7 +153,7 @@ Using the previous violin plots, choose cutoffs to proceed with for processing.
 nCount_RNA_max <- list(60000,
                        45000,
                        60000,
-                       80000)
+                       60000)
 names(nCount_RNA_max) <- sample_names
 
 # set min for ncounts 
@@ -238,7 +238,7 @@ rm(Control, oHSV, Trabectedin, Combination)
 A673_hsv_rep2 <- FindNeighbors(A673_hsv_rep2, dims = 1:21) %>%
   FindClusters(resolution = 0.1) %>%
   RunUMAP(dims = 1:21)
-
+  
 DimPlot(A673_hsv_rep2,
         reduction = "umap",
         split.by = "treatment",
