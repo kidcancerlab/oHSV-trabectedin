@@ -312,6 +312,7 @@ save(K7M2_hsv_even,
 ```
 
 # Use Recursive Clustering
+*Figure S6B*
 
 ```{r recurl, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
 # Load the function code (developed by Matthew Cannon)
@@ -357,6 +358,7 @@ C50_29 = createPalette(50,
                        c("#ff0000", "#ffff00", "#00ff00", "#0000ff"),
                        range = c(20, 90))
 
+#### Figure S6B ####
 # Save as a pdf
 pdf("Plots/krecurlustered_level2.pdf",
     height = 10,
@@ -387,7 +389,6 @@ krecurlustered_markers <- FindAllMarkers(krecurlustered,
                                          logfc.threshold = 0.25,
                                          only.pos = F)
 
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
 # Print top 10 in each cluster
 krecurlustered_markers %>%
   group_by(cluster) %>%
@@ -395,11 +396,8 @@ krecurlustered_markers %>%
 
 # Get dataframe into proper format 
 t <- as.data.frame(t)
-#t$cluster <- as.numeric(as.character(t$cluster))
-#t <- t[order(t$cluster),]
 t <- t[,c(7, 1:6)]
 t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
 
 # Create interactive datatable showing top 10 DEG in each cluster 
 DT::datatable(t, 
@@ -420,6 +418,7 @@ DT::datatable(t,
 # Assign Cell Identities
 
 ## SingleR Cell Predictions
+*Figure S6A*
 
 This is an automatic prediction method for cell types. Here, I specifically use the SingleR mouse immune reference for predicted cell assignment of cell clusters. Often this method is a general assignment and may miss more specific cell subtypes, especially for macrophages.
 
@@ -458,7 +457,7 @@ maxv <- apply(Tumor_hsv_pred_types$scores,
 hist(maxv,
      n = 200)
 
-krecurlustered$singleRscore <- maxv  #scores may be a matrix
+krecurlustered$singleRscore <- maxv
 
 as.data.frame(krecurlustered@meta.data) %>%
   as_tibble() %>%
@@ -466,15 +465,18 @@ as.data.frame(krecurlustered@meta.data) %>%
   geom_histogram(bins = 200) +
   facet_wrap(~singleR2,
              ncol = 3,
-             scales = "free_y") #****
-  
+             scales = "free_y")
+
 table(krecurlustered$singleR2,
       krecurlustered$treatment)
 ```
 
-```{r singlr_plot, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
-Idents(krecurlustered) <- krecurlustered$singleR2 
+```{r singlr_plot, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr", "singler_cont")}
+# Label cells with singleR cell types
+Idents(krecurlustered) <- krecurlustered$singleR2
+
 # Plot
+## Reconcile same cell type, but different names from the two references used
 krecurlustered <- 
   RenameIdents(krecurlustered,
                "Dendritic cells" = "DC") %>%
@@ -488,6 +490,8 @@ DimPlot(krecurlustered,
   coord_fixed() +
   ggtitle("Mouse Reference")
 
+#### Figure S6A ####
+## Save as pdf
 pdf("Plots/K7M2_2/singlr.pdf",
     height = 10,
     width = 10)
@@ -502,8 +506,8 @@ r_dim_plot(krecurlustered,
 dev.off()
 ```
 
-```{r singlr_plot2, fig.width=12, fig.height=5, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
-# Rename cell ids
+```{r singlr_plot2, fig.width=12, fig.height=5, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr", "singler_cont")}
+# Rename cell ids under identity "SingleR2ed" in metadata 
 krecurlustered <- 
   RenameIdents(krecurlustered,
                "Dendritic cells" = "DC",
@@ -515,6 +519,7 @@ krecurlustered <-
                "Fibroblasts" = "Tumor cells") %>%
   StashIdent(save.name = "SingleR2ed")
 
+# Plot and save as pdf
 k7m2_ids <- r_dim_plot(krecurlustered,
                        reduction = "umap",
                        pt.size = 0.5,
@@ -533,8 +538,11 @@ dev.off()
 ```
 
 ### Label cell identities
+*Figure 4A*
+*Figure S6C*
 
-```{r cellname}
+```{r cellname, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample")}
+# Using the above SingleR cell assignments, apply these to recurl clusters
 krecurlustered$cell_ids <-
   str_replace_all(krecurlustered$clust_3,
                   c(
@@ -562,32 +570,52 @@ krecurlustered$cell_ids <-
                     "clust_1.0.2" = "Macrophages"
                   )) 
 
+# Plot and save
+#### Figure 4A ####
 labeled_dim <- r_dim_plot(krecurlustered,
                           group.by = "cell_ids",
-                          label = F,
-                          shuffle = T,
-                          #repel = T,
-                          split.by = "treatment") +
+                          label = T,
+                          repel = T,
+                          shuffle = T) +
+  coord_fixed() + 
+  ggplot2::theme(legend.position = "none")
+labeled_dim
+
+# Save as pdf
+pdf(file = "Plots/K7M2_2/Figure4A_krecurl_cell_ids_dim.pdf",
+    height = 5,
+    width = 5)
+labeled_dim
+dev.off()
+
+#### Figure S6C ####
+labeled_dim_trtmnt <- r_dim_plot(krecurlustered,
+                                 split.by = "treatment",
+                                 group.by = "cell_ids",
+                                 label = F,
+                                 shuffle = T,
+                                 pt.size = 0.5) +
   coord_fixed() + 
   ggplot2::theme(legend.position = "right")
+labeled_dim_trtmnt
 
-pdf(file = "Plots/K7M2_2/krecurl_cell_ids_dim_2.pdf",
+# Save as pdf
+pdf(file = "Plots/K7M2_2/FigureS6C_krecurl_cell_ids_dim_bytrtmnt.pdf",
     height = 5,
     width = 20)
 labeled_dim
 dev.off()
-
-r_dim_plot(krecurlustered,
-           split.by = "treatment",
-           group.by = "cell_ids") +
-  coord_fixed()
 ```
 
-```{r anysubset2}
+### Plot composition of major cell groups
+*Figure S6D*
+
+```{r anysubset2, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample")}
 library(dittoSeq)
 # set idents 
 Idents(krecurlustered) <- krecurlustered$cell_ids
-# subset cells
+
+# subset cells based on identity
 tumor <- subset(krecurlustered,
                 idents = "Tumor cells")
 nk_t <- subset(krecurlustered,
@@ -620,11 +648,6 @@ for (celltype in names(subsets)) {
   # Display overall cell count prior to downsampling
   table(subsets[[celltype]]$treatment) %>%
     print()
-  # show cell quantities
-  print(dittoBarPlot(subsets[[celltype]],
-                     var = "cell_ids",
-                     group.by = "treatment")) +
-    ggtitle(celltype)
   # Subset the highest number that makes all treatment groups equal in cell number
   type <-
     subset(subsets[[celltype]],
@@ -638,11 +661,13 @@ for (celltype in names(subsets)) {
   assign(paste0(celltype,
                 "_downsampled"),
          type)
-  # show cell quantities
+  # Plot cell type proportions as a barplot
   print(dittoBarPlot(subsets[[celltype]],
                      var = "cell_ids",
                      group.by = "treatment",
                      data.out = TRUE))
+  #### Figure S6D ####
+  ## Save as pdf
   pdf(paste0("Plots/K7M2_2/",
              celltype,
              "cellgroup_subsets.pdf"))
@@ -650,86 +675,14 @@ for (celltype in names(subsets)) {
                      var = "cell_ids",
                      group.by = "treatment"))
   dev.off()
-  ## Plot
-  print(
-    DimPlot(type,
-            split.by = "treatment") +
-    ggtitle(paste(celltype, "Cells"))
-  )
-}
-```
-
-### Analyze T and NK Cytotoxicity Expression
-
-```{r nktsubsets}
-# set idents 
-Idents(krecurlustered) <- krecurlustered$cell_ids
-# subset cells
-nk <- subset(krecurlustered,
-             idents = "NK cells")
-cd8t <- subset(krecurlustered,
-               idents = "CD8 T cells")
-activ_nkt <- subset(krecurlustered,
-                    idents = "Activated NK and CD8 T cells")
-prolif_nkt <- subset(krecurlustered,
-                    idents = "Prolif NK and T cells")
-
-subsets <- list(NK = nk,
-                CD8_T = cd8t,
-                Activated_NK_T = activ_nkt,
-                Prolif_NK_T = prolif_nkt)
-
-for (celltype in names(subsets)) {
-  # Set seed before random downsampling
-  set.seed(132)
-  Idents(subsets[[celltype]]) <- subsets[[celltype]]$treatment
-  print(celltype)
-  print(table(subsets[[celltype]]$treatment))
-  # Subset the highest number that makes all treatment groups equal in cell number
-  type <-
-    subset(subsets[[celltype]],
-           downsample = table(subsets[[celltype]]$treatment) %>%
-             min())
-  ## Check that worked: cell numbers across treatments should be equal
-  print(paste("Downsampled",
-              celltype))
-  print(table(type$treatment))
-  # Label cells by treatment group
-  Idents(type) <- type$treatment
-  # Assign to an object
-  assign(celltype, type)
-  ## Plot
-  print(DimPlot(type,
-                split.by = "treatment"))
-  ## Plot granzyme expression
-  pdf(paste0("Plots/K7M2_2/",
-             celltype,
-             "_GzmVln",
-             ".pdf"),
-      height = 14,
-      width = 10)
-  print(VlnPlot(type,
-                features = c("Gzmd",
-                             "Gzme",
-                             "Gzmc",
-                             "Gzmf",
-                             "Gzmg",
-                             "Gzma",
-                             "Gzmb",
-                             "Prf1",
-                             "Xcl1"),
-                log = T,
-                split.by = "treatment",
-                group.by = "treatment",
-                cols = c("grey", "darkblue", "orangered", "purple"))
-        )
-  dev.off()
 }
 ```
 
 ### Death receptor signaling
+Previously proposed a method of tumor cell killing via TRAIL-TRAILR2 signaling.
+However, below shows minimal expression differences between treatment groups.
 
-```{r fig.height=4, fig.width=9}
+```{r deathrecp, fig.height=4, fig.width=9, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample", "anysubset2")}
 # Death receptor signaling
 Idents(tumor) <- tumor$treatment
 VlnPlot(tumor,
@@ -744,43 +697,21 @@ VlnPlot(nk_t,
                      "Tbx21"),
         log = T,
         split.by = "treatment")
-
-pdf("Plots/K7M2_2/deathreceptors-tumor.pdf",
-    height = 5,
-    width = 10)
-VlnPlot(tumor,
-        features = c("Fas",
-                     "Tnfrsf10b",
-                     "Hspa1a"),
-        log = T,
-        split.by = "treatment")
-dev.off()
-
-pdf("Plots/K7M2_2/deathsignals-nkt.pdf",
-    height = 5,
-    width = 10)
-VlnPlot(nk_t,
-        features = c("Fasl",
-                     "Tnfsf10",
-                     "Tbx21"),
-        log = T,
-        split.by = "treatment")
-dev.off()
 ```
 
 # Subset Cell ID Analysis
-
+*Figure 4B - Activated NK and CD8 T cells*
 Uses krecurlustered subsets
 
-```{r cell_subset, fig.width=10, fig.height=10}
+```{r cell_subset, fig.width=10, fig.height=10, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample", "anysubset2")}
 library(cowplot)
 library(forcats)
 library(ggstance)
 source("enrichplot_codeforbarplot.R")
 library(enrichplot)
 library(DOSE)
-#source("dgea.R")
 
+#### Figure 4B ####
 # Change idents to cell identities
 Idents(krecurlustered) <- krecurlustered$cell_ids
 # Create list for plots
@@ -983,10 +914,34 @@ for (cell_id in levels(krecurlustered)) {
 }
 ```
 
-Find and plot NK & T cell cytotoxicity genes of interest 
+# Analyze T and NK Cytotoxicity Expression
+*Figure 4D*
 
-```{r granzymes, fig.height = 11,fig.width=9,dependson="anysubset2"}
-#Granzymes
+```{r granzymes, fig.height = 11,fig.width=9,dependson=c("define_samples","load","load-final","downsample","process","umap","downsample", "anysubset2")}
+#### Figure 4D ####
+# Plot genes of interest
+cytotoxicity_genes <- VlnPlot(nk_t,
+                              features = c("Gzmd",
+                                           "Gzme",
+                                           "Gzmc",
+                                           "Gzmf",
+                                           "Gzmd",
+                                           "Gzma",
+                                           "Gzmb",
+                                           "Prf1",
+                                           "Xcl1"),
+                              log = T,
+                              split.by = "treatment",
+                              cols = c("grey", "darkblue", "orangered", "purple"))
+cytotoxicity_genes
+
+pdf("Plots/K7M2_2/Figure4D_nk_t-gzms.pdf",
+    height = 14,
+    width = 10)
+cytotoxicity_genes
+dev.off()
+
+# Calculate fold changes in oHSV+trab vs. oHSV alone
 Idents(nk_t) <- nk_t$treatment
 nkt_markers <- FindMarkers(nk_t,
                            ident.1 = "4 - oHSV+Trabectedin",
@@ -1020,39 +975,6 @@ DT::datatable(nkt_markers,
                             'csv',
                             'excel')
               ))
-
-# Plot genes of interest
-VlnPlot(nk_t,
-        features = c("Gzmd",
-                     "Gzme",
-                     "Gzmc",
-                     "Gzmf",
-                     "Gzmd",
-                     "Gzma",
-                     "Gzmb",
-                     "Prf1",
-                     "Xcl1"),
-        log = T,
-        split.by = "treatment",
-        cols = c("grey", "darkblue", "orangered", "purple"))
-
-pdf("Plots/K7M2_2/nk_t-gzms.pdf",
-    height = 14,
-    width = 10)
-VlnPlot(nk_t,
-        features = c("Gzmd",
-                     "Gzme",
-                     "Gzmc",
-                     "Gzmf",
-                     "Gzmg",
-                     "Gzma",
-                     "Gzmb",
-                     "Prf1",
-                     "Xcl1"),
-        log = T,
-        split.by = "treatment",
-        cols = c("grey", "darkblue", "orangered", "purple"))
-dev.off()
 
 # Check fold change differences in trab. vs control
 FoldChange(nk_t,
