@@ -1,6 +1,6 @@
 ---
-title: "A673 Tumor+Immune scRNAseq Analysis with HSV reference"
-author: "Emily Franz"
+title: "A673 Tumor Replicate 2 scRNAseq Analysis with HSV reference"
+author: "Emily Ringwalt"
 date: "`r format(Sys.time(), '%m/%d/%Y')`"
 output:
   html_document:
@@ -303,7 +303,8 @@ DimPlot(A673_hsv_rep2_even,
 ```
 
 ```{r save, dependson= c("load_final","process","umap","downsample","singlr")}
-save(A673_hsv_rep2_even, file  = "Data/tumor-immune-A673_hsv_rep2_even-labeled.RData")
+save(A673_hsv_rep2_even,
+     file  = "Data/tumor-immune-A673_hsv_rep2_even-labeled.RData")
 ```
 
 ```{r}
