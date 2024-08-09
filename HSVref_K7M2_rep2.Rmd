@@ -360,7 +360,7 @@ C50_29 = createPalette(50,
 
 #### Figure S6B ####
 # Save as a pdf
-pdf("Plots/krecurlustered_level2.pdf",
+pdf("Plots/K7M2_2/FigureS6B_krecurlustered_level2.pdf",
     height = 10,
     width = 12)
 DimPlot(krecurlustered,
@@ -492,7 +492,7 @@ DimPlot(krecurlustered,
 
 #### Figure S6A ####
 ## Save as pdf
-pdf("Plots/K7M2_2/singlr.pdf",
+pdf("Plots/K7M2_2/FigureS6A_singlr.pdf",
     height = 10,
     width = 10)
 r_dim_plot(krecurlustered,
@@ -506,39 +506,9 @@ r_dim_plot(krecurlustered,
 dev.off()
 ```
 
-```{r singlr_plot2, fig.width=12, fig.height=5, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr", "singler_cont")}
-# Rename cell ids under identity "SingleR2ed" in metadata 
-krecurlustered <- 
-  RenameIdents(krecurlustered,
-               "Dendritic cells" = "DC",
-               "Tgd" = "T cells",
-               "Stem cells" = "Tumor cells",
-               "Granulocytes" = "Neutrophils",
-               "Erythrocytes" = "Tumor cells",
-               "Adipocytes" = "Tumor cells",
-               "Fibroblasts" = "Tumor cells") %>%
-  StashIdent(save.name = "SingleR2ed")
-
-# Plot and save as pdf
-k7m2_ids <- r_dim_plot(krecurlustered,
-                       reduction = "umap",
-                       pt.size = 0.5,
-                       label = T,
-                       repel = T,
-                       split.by = "treatment") +
-  coord_fixed() +
-  ggtitle("Mouse Reference")
-k7m2_ids
-
-pdf("Plots/K7M2_2/k7m2_renamesinglr_split.pdf",
-    height = 10,
-    width = 20)
-k7m2_ids
-dev.off()
-```
-
 ### Label cell identities
 *Figure 4A*
+
 *Figure S6C*
 
 ```{r cellname, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample")}
@@ -556,7 +526,7 @@ krecurlustered$cell_ids <-
                     "clust_2.0.." = "NK cells",
                     "clust_2.2.." = "CD8 T cells",
                     "clust_2.4.." = "Prolif NK and T cells",
-                    "clust_2.1.." = "Activated NK and CD8 T cells",
+                    "clust_2.1.." = "Activated NK and T cells",
                     "clust_2.5.." = "Tregs",
                     "clust_2.6.." = "CD4 T cells",
                     "clust_3.1.." = "Endothelial cells",
@@ -576,7 +546,8 @@ labeled_dim <- r_dim_plot(krecurlustered,
                           group.by = "cell_ids",
                           label = T,
                           repel = T,
-                          shuffle = T) +
+                          shuffle = T,
+                          pt.size = 0.5) +
   coord_fixed() + 
   ggplot2::theme(legend.position = "none")
 labeled_dim
@@ -603,7 +574,7 @@ labeled_dim_trtmnt
 pdf(file = "Plots/K7M2_2/FigureS6C_krecurl_cell_ids_dim_bytrtmnt.pdf",
     height = 5,
     width = 20)
-labeled_dim
+labeled_dim_trtmnt
 dev.off()
 ```
 
@@ -622,7 +593,7 @@ nk_t <- subset(krecurlustered,
                idents = c("NK cells",
                           "CD8 T cells",
                           "Prolif NK and T cells",
-                          "Activated NK and CD8 T cells",
+                          "Activated NK and T cells",
                           "Tregs",
                           "CD4 T cells"))
 myeloid <- subset(krecurlustered,
@@ -670,7 +641,7 @@ for (celltype in names(subsets)) {
   ## Save as pdf
   pdf(paste0("Plots/K7M2_2/",
              celltype,
-             "cellgroup_subsets.pdf"))
+             "FigureS6D_cellgroup_subsets.pdf"))
   print(dittoBarPlot(subsets[[celltype]],
                      var = "cell_ids",
                      group.by = "treatment"))
@@ -700,7 +671,8 @@ VlnPlot(nk_t,
 ```
 
 # Subset Cell ID Analysis
-*Figure 4B - Activated NK and CD8 T cells*
+*Figure 4B - Activated NK and T cells*
+
 Uses krecurlustered subsets
 
 ```{r cell_subset, fig.width=10, fig.height=10, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample", "anysubset2")}
@@ -919,6 +891,7 @@ for (cell_id in levels(krecurlustered)) {
 
 ```{r granzymes, fig.height = 11,fig.width=9,dependson=c("define_samples","load","load-final","downsample","process","umap","downsample", "anysubset2")}
 #### Figure 4D ####
+Idents(nk_t) <- nk_t$treatment
 # Plot genes of interest
 cytotoxicity_genes <- VlnPlot(nk_t,
                               features = c("Gzmd",
