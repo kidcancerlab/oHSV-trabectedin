@@ -1,6 +1,6 @@
 ---
-title: "Repeat A673 tumor only scRNAseq with HSV reference"
-author: "Emily Franz"
+title: "Combined A673 tumor scRNAseq with HSV reference"
+author: "Emily Ringwalt"
 date: "`r format(Sys.time(), '%m/%d/%Y')`"
 output: 
   html_document:
@@ -26,7 +26,7 @@ knitr::opts_chunk$set(
 ```{r lib, cache = FALSE}
 library(Seurat)
 library(tidyverse)
-library(ggsci) # find where needed
+library(ggsci)
 library(rrrSingleCellUtils)
 library(patchwork)
 library(data.table)
@@ -201,14 +201,14 @@ DT::datatable(hsv_dt,
               ))
 ```
 
-A closer look at HSV transcript presence in the data.
+A closer look at HSV transcript presence in the data:
 
 ```{r matthelp_assaydata, dependson = "matthelp_hsvgenes"}
-#Make a compressed matrix of HSV1 genes as rownames and the corresponding single cell data for each gene (getassaydata is scaled data)
+# Make a compressed matrix of HSV1 genes as rownames and the corresponding 
+#single cell data for each gene (getassaydata is scaled data)
 assay.data <- GetAssayData(A673_hsv_comb_even[hsv])
 
-# Rownames of compressed matrix (assay.data) should be the genes from the subset of genes above
-#(hsv <- str_subset)
+# Rownames of compressed matrix (assay.data) should be the genes from the subset above
 #row.names(assay.data)
 
 # Make a numeric vector of the column sums 
@@ -239,7 +239,8 @@ tibble(cell_sum = assay_col) %>%
   scale_x_log10()
 ```
 
-Given that this new analysis better captures viral presence, it is added to the tumor data as metadata. The UMAP distribution of oHSV transcripts is shown.
+Given that this analysis captures viral transcript presence/abundance well, 
+it is added to the tumor data as metadata. 
 
 ```{r new_hsv_meta, dependson = c("matthelp_hsvgenes","matthelp_assaydata")}
 A673_hsv_comb_even <- AddMetaData(A673_hsv_comb_even,
@@ -252,9 +253,11 @@ A673_hsv_comb_even <- AddMetaData(A673_hsv_comb_even,
 ```
 
 ### DimPlots: oHSV presence
+*Figure 2C*
 
 ```{r hsvdimplot, fig.height=5, fig.width=10, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
 
+#### Figure 2C #### 
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$oHSV_presence
 
 # Change identities from TRUE/FALSE to infected/uninfected 
@@ -276,7 +279,7 @@ ohsvpresence <- DimPlot(A673_hsv_comb_even,
   coord_fixed()
 ohsvpresence
 
-pdf("Plots/A673_comb/ohsv_presence_dimplot.pdf",
+pdf("Plots/A673_comb/Figure2C_ohsv_presence_dimplot.pdf",
     height = 5,
     width = 10)
 ohsvpresence
@@ -358,6 +361,7 @@ obj4vln <- RenameIdents(A673_hsv_comb_even,
                           "3 - Trabectedin" = "3",
                           "4 - oHSV+Trabectedin" = "4"))
 
+#### Figure 2D ####
 # Violin plot with new naming and on log scale
 log_ab <- VlnPlot(obj4vln,
                   features = "oHSV_abundance",
@@ -365,92 +369,15 @@ log_ab <- VlnPlot(obj4vln,
                   log = TRUE,
                   cols = c("grey", "darkblue", "orangered", "purple")) +
   NoLegend()
-# Plot in html output
+# Plot in rmd html output
 log_ab
 
 # Save as pdf
-pdf("Plots/A673_comb/vln_log_hsvabundance.pdf",
+pdf("Plots/A673_comb/Figure2D_vln_log_hsvabundance.pdf",
     height = 5, width = 5)
 print(log_ab)
 dev.off()
 ```
-
-#### Expression calculations
-```{r abundexp, dependson = c("matthelp_hsvgenes","matthelp_assaydata","new_hsv_meta")}
-#### Abundance ####
-tabl <- data.table("abund" = A673_hsv_comb_even@meta.data[["oHSV_abundance"]],
-                   "trt" = A673_hsv_comb_even@meta.data[["treatment"]])
-subset(tabl,
-       trt=="4 - oHSV+Trabectedin") -> combo
-mean(combo[["abund"]])
-#[1] 15.24358
-subset(tabl, trt=="2 - oHSV") -> hsv
-mean(hsv[["abund"]])
-#[1] 8.543426
-# oHSV_abundance expression difference
-mean(combo[["abund"]]) - mean(hsv[["abund"]])
-# fold change
-(mean(combo[["abund"]]) - mean(hsv[["abund"]])) / mean(hsv[["abund"]])
-mean(hsv[["abund"]]) / mean(combo[["abund"]])
-# log2fc
-log2(mean(combo[["abund"]]) / mean(hsv[["abund"]]))
-
-#### Timepoint ####
-## Immediate Early
-tabl_ie <- data.table("abund" = A673_hsv_comb_even@meta.data[["Immediate_Early_Genes"]],
-                   "trt" = A673_hsv_comb_even@meta.data[["treatment"]])
-subset(tabl_ie,
-       trt=="4 - oHSV+Trabectedin") -> combo
-mean(combo[["abund"]])
-
-subset(tabl_ie, trt=="2 - oHSV") -> hsv
-mean(hsv[["abund"]])
-
-# oHSV_abundance expression difference
-mean(combo[["abund"]]) - mean(hsv[["abund"]])
-# fold change
-(mean(combo[["abund"]]) - mean(hsv[["abund"]])) / mean(hsv[["abund"]])
-mean(hsv[["abund"]]) / mean(combo[["abund"]])
-# log2fc
-log2(mean(combo[["abund"]]) / mean(hsv[["abund"]]))
-
-## Early
-tabl_e <- data.table("abund" = A673_hsv_comb_even@meta.data[["Early_Genes"]],
-                   "trt" = A673_hsv_comb_even@meta.data[["treatment"]])
-subset(tabl_e,
-       trt=="4 - oHSV+Trabectedin") -> combo
-mean(combo[["abund"]])
-
-subset(tabl_e, trt=="2 - oHSV") -> hsv
-mean(hsv[["abund"]])
-
-# oHSV_abundance expression difference
-mean(combo[["abund"]]) - mean(hsv[["abund"]])
-# fold change
-(mean(combo[["abund"]]) - mean(hsv[["abund"]])) / mean(hsv[["abund"]])
-mean(hsv[["abund"]]) / mean(combo[["abund"]])
-# log2fc
-log2(mean(combo[["abund"]]) / mean(hsv[["abund"]]))
-
-## Late
-tabl_l <- data.table("abund" = A673_hsv_comb_even@meta.data[["Late_Genes"]],
-                   "trt" = A673_hsv_comb_even@meta.data[["treatment"]])
-subset(tabl_l,
-       trt=="4 - oHSV+Trabectedin") -> combo
-mean(combo[["abund"]])
-
-subset(tabl_l, trt=="2 - oHSV") -> hsv
-mean(hsv[["abund"]])
-
-# oHSV_abundance expression difference
-mean(combo[["abund"]]) - mean(hsv[["abund"]])
-# fold change
-(mean(combo[["abund"]]) - mean(hsv[["abund"]])) / mean(hsv[["abund"]])
-mean(hsv[["abund"]]) / mean(combo[["abund"]])
-# log2fc
-log2(mean(combo[["abund"]]) / mean(hsv[["abund"]]))
-```
-
 
 ### HSV Time Point Module Scores
 
@@ -569,94 +496,16 @@ for (hsv_time in names(hsv_timepoints)) {
   dev.off()
 }
 
-# Find log2fc and pvalue of HSV elements
-FindMarkers(A673_hsv_comb_even,
-            ident.1 = "4 - oHSV+Trabectedin",
-            ident.2= "2 - oHSV",
-            features = c("HSV1-RL2",
-                         "HSV1-RS1",
-                         "HSV1-UL54",
-                         "HSV1-US1",
-                         "HSV1-US12"))
-
-FindMarkers(A673_hsv_comb_even,
-            ident.1 = "4 - oHSV+Trabectedin",
-            ident.2= "2 - oHSV",
-            features = c("HSV1-UL23",
-                         "HSV1-UL29",
-                         "HSV1-UL50",
-                         "HSV1-UL2"))
-
-FindMarkers(A673_hsv_comb_even,
-            ident.1 = "4 - oHSV+Trabectedin",
-            ident.2= "2 - oHSV",
-            features = c("HSV1-UL48",
-                         "HSV1-UL19",
-                         #"HSV1-US6", #gene not present in data
-                         "HSV1-UL27",
-                         "HSV1-UL53",
-                         "HSV1-UL44",
-                         "HSV1-UL41"))
-
 save(A673_hsv_comb_even,
-     file  = "Data/tumor-only-A673_hsv_comb_even-labeled.RData")
+     file  = "Data/A673_hsv_comb_even-labeled.RData")
 ```
 
-```{r hsv_patchwork_cutoff1, fig.height = 12, fig.width = 16, dependson = "hsv_timepoints"}
-hsv_patchwork_lo <- 
-  (plots[["Immediate_Early_Genes_plot_cutoff1"]] / 
-     plots[["Early_Genes_plot_cutoff1"]] / 
-     plots[["Late_Genes_plot_cutoff1"]]) +
-  plot_annotation(title = 'Max Cutoff of 1',
-                  theme = theme(plot.title = element_text(size = 18)))
-
-hsv_patchwork_lo
-```
-
-```{r hsv-vln, height = 15, width = 7, dependson = "hsv_timepoints"}
-for (hsv_time in names(hsv_timepoints)) {
-# Create Violin Plots based on the timepoint module scores
-  plots[[paste0(hsv_time, "_vln")]] <- 
-    VlnPlot(A673_hsv_comb_even,
-            features = hsv_time,
-            group.by = "treatment",
-            split.by = "treatment",
-            log = TRUE,
-            cols = c("grey", "darkblue", "orangered", "purple")) +
-    theme(aspect.ratio = 1)
-  
-print(plots[[paste0(hsv_time, "_vln")]])
-}
-```
+*Figure 2E*
 
 ```{r hsv-dot, height = 10, width = 10, dependson = "hsv_timepoints"}
+#### Figure 2E ####
 # Set cell identities to treatment group
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
-
-# Dot plots of timepoint gene expression for groups of interest
-dot <- subset(A673_hsv_comb_even,
-              idents = c("2 - oHSV", "4 - oHSV+Trabectedin")) %>%
-  DotPlot(features = c("Immediate_Early_Genes",
-                       "Early_Genes",
-                       "Late_Genes"),
-          scale = F,
-          group.by = "treatment",
-          cols = c("lightgoldenrod", "darkred"),
-          dot.min = 0)
-print(dot)
-
-# Alter dot settings
-dot2 <- subset(A673_hsv_comb_even,
-              idents = c("2 - oHSV", "4 - oHSV+Trabectedin")) %>%
-  DotPlot(features = c("Immediate_Early_Genes",
-                       "Early_Genes",
-                       "Late_Genes"),
-          scale = F,
-          group.by = "treatment",
-          cols = c("lightgoldenrod", "darkred"),
-          dot.scale = 20,
-          dot.min = -10)
-print(dot2)
 
 # Feature plot of timepoint gene expression for groups of interest
 feature <- subset(A673_hsv_comb_even,
@@ -664,7 +513,7 @@ feature <- subset(A673_hsv_comb_even,
   r_feature_plot(features = c("Immediate_Early_Genes",
                               "Early_Genes",
                               "Late_Genes"),
-                 #split.by = "treatment",
+                 split.by = "treatment",
                  order = TRUE,
                  max.cutoff = 1,
                  min.cutoff = 0) +
@@ -672,15 +521,15 @@ feature <- subset(A673_hsv_comb_even,
 print(feature)
 
 # Save as pdf
-pdf("Plots/A673_comb/featureplot_time.pdf",
+pdf("Plots/A673_comb/Figure2E_featureplot_time.pdf",
     height = 12.5,
     width = 8.25)
 print(feature)
 dev.off()
 
 # Violin plot of timepoint gene expression for groups of interest
-vln <- subset(A673_hsv_comb_even,
-              idents = c("2 - oHSV", "4 - oHSV+Trabectedin")) %>%
+time_vln <- subset(A673_hsv_comb_even,
+                   idents = c("2 - oHSV", "4 - oHSV+Trabectedin")) %>%
   VlnPlot(features = c("Immediate_Early_Genes",
                        "Early_Genes",
                        "Late_Genes"),
@@ -690,17 +539,20 @@ vln <- subset(A673_hsv_comb_even,
           log = T,
           cols = c("darkblue", "purple")) +
   NoLegend()
-print(vln)
+print(time_vln)
 
 # Save as pdf
-pdf("Plots/A673_comb/vlnplot_time.pdf",
+pdf("Plots/A673_comb/Figure2F_vlnplot_time.pdf",
     height = 5,
     width = 9)
-print(vln)
+print(time_vln)
 dev.off()
 ```
 
+*Figure S4A*
+
 ```{r timeexp, dependson = "hsv_timepoints"}
+#### Figure S4A ####
 # Isolate the time-related HSV genes found in the A673 data
 hsv_genes <- intersect(c(imm_early[[1]],
                          early[[1]],
@@ -715,6 +567,11 @@ hsv_DEG <- FindMarkers(A673_hsv_comb_even,
                        logfc.threshold = 0,
                        min.pct = 0,
                        only.pos = F)
+hsv_DEG
+
+# Save
+write.csv(hsv_DEG,
+          file = "Data/FigureS4A_A673_hsv_gene_exp.csv")
 ```
 
 # Antiviral Analysis
@@ -722,25 +579,28 @@ hsv_DEG <- FindMarkers(A673_hsv_comb_even,
 ## Gene List
 
 ## Differential Gene Expression and Gene Set Enrichment Analysis
+*Figure 2G*,
+*Figure S4B*
 
 Differential gene expression in combination compared to oHSV alone (gene list shown in the table below). GO and KEGG analyses are performed.
 
-No logfc cutoff for DEG, GO, KEGG
+No logfc cutoff for DEG & KEGG
 
 ```{r deg-trt-0, fig.height=10, fig.width=10, dependson = "hsv_timepoints"}
 Idents(A673_hsv_comb_even) <- A673_hsv_comb_even$treatment
-# maybe try with infected cells (what is changing in infected cells, not whole sample)
+
+# Find DEG between oHSV and combination groups
+## Arrange in descending order of avg_log2FC
 trtdiff <- FindMarkers(A673_hsv_comb_even,
                        ident.1 = "4 - oHSV+Trabectedin",
                        ident.2 = "2 - oHSV",
                        logfc.threshold = 0,
-                       only.pos = F) %>%
-  arrange(-abs(avg_log2FC))
+                       only.pos = F)
 
 trtdiff <- as.data.frame(trtdiff)
 trtdiff <- arrange(trtdiff, desc(avg_log2FC))
 
-# Save for use in IPA
+# Save
 write.csv(trtdiff,
           file = "Data/A673_comb_trtdiff_nocutoff.csv")
 
@@ -765,12 +625,13 @@ gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
                                       organism = "hsa",
                                       eps = 0,
                                       pvalueCutoff = 1)
+
 gsea_KEGG <- mutate(gsea_KEGG,
                     p.adjust = -log10(p.adjust))
+
 plots <- list()
 
 if (nrow(gsea_KEGG) > 0) {
-  
   pdf("Plots/A673_comb/dotplot_kegg_nocutoff.pdf",
       height = 8,
       width = 8)
@@ -845,6 +706,7 @@ if (nrow(gsea_KEGG) > 0) {
   )
 }
 
+#### Figure 2G ####
 # Look at GSEA enrichment for HSV pathway (hsa05168)
 enrichplot::gseaplot(gsea_KEGG,
                      by = "all",
@@ -855,9 +717,9 @@ enrichplot::gseaplot2(gsea_KEGG,
                      geneSetID = "hsa05168",
                      pvalue_table = T)
 # save as pdf
-pdf(file = "Plots/A673_comb/gsea_curve_hsv_nocutoff.pdf",
-    height = 2,
-    width = 2)
+pdf(file = "Plots/A673_comb/Figure2G_gsea_curve_hsv_nocutoff.pdf",
+    height = 10,
+    width = 5)
 enrichplot::gseaplot(gsea_KEGG,
                      by = "all",
                      title = "Herpes simplex virus 1 infection",
@@ -880,10 +742,10 @@ browser <- clusterProfiler::browseKEGG(gsea_KEGG, 'hsa05168')
 ## Plot expression onto pathway
 library("pathview")
 library("DOSE")
-hsa05168 <- pathview(gene.data  = keggdegs,
+hsa05168 <- pathview(gene.data = keggdegs,
                      pathway.id = "hsa05168",
-                     species    = "hsa",
-                     limit      = list(gene=max(abs(keggdegs)), cpd=1))
+                     species = "hsa",
+                     limit = list(gene=max(abs(keggdegs)), cpd=1))
 
 ## convert gene ID to Symbol
 gsea_KEGG_symbol <- setReadable(gsea_KEGG, 'org.Hs.eg.db', 'ENTREZID')
@@ -898,58 +760,8 @@ save(gsea_KEGG,
      file = "Data/gsea_KEGG__A673_nocutoff.RData")
 ```
 
-## Expression of Genes Enriched in KEGG HSV pathway
-
-```{r hsvpath_exp, dependson = "deg-trt-0"}
-antiviral_dot <- subset(A673_hsv_comb_even,
-                        idents = c("2 - oHSV", "4 - oHSV+Trabectedin")) %>%
-  DotPlot(features = c("BIRC2",
-                       "BIRC3",
-                       "TYK2",
-                       "SOCS3",
-                       "JAK1",
-                       "JAK2",
-                       "EIF2AK2",
-                       "PPP1CA"),
-          cols = "Spectral",
-          scale = FALSE) +
-  RotatedAxis()
-antiviral_dot
-
-antiviral_vln <- subset(A673_hsv_comb_even,
-                        idents = c("2 - oHSV", "4 - oHSV+Trabectedin")) %>%
-  VlnPlot(features = c("BIRC2",
-                       "BIRC3",
-                       "TYK2",
-                       "SOCS3",
-                       "JAK1",
-                       "JAK2",
-                       "EIF2AK2",
-                       "PPP1CA"),
-          group.by = "treatment",
-          log = TRUE) +
-  RotatedAxis()
-pdf(file = "Plots/A673_comb/antiviral_vln_fromkegg.pdf",
-    height = 12,
-    width = 10)
-antiviral_vln
-dev.off()
-
-FoldChange(A673_hsv_comb_even,
-           ident.1 = "4 - oHSV+Trabectedin",
-           ident.2 = "2 - oHSV",
-           features = c("BIRC2",
-                        "BIRC3",
-                        "TYK2",
-                        "SOCS3",
-                        "JAK1",
-                        "JAK2",
-                        "EIF2AK2",
-                        "PPP1CA"))
-```
-
 ```{r wholehsvpath_exp, dependson = "deg-trt-0"}
-# Generate list of all genes in the HSV1 pathway (hsa05168)
+# Generate list of all genes in the HSV1 pathway plot (hsa05168)
 hsa05168_genelist <- hsa05168$plot.data.gene[["labels"]]
 
 # Only keep genes found in the A673 data
@@ -994,6 +806,8 @@ dev.off()
 ```
 
 #### Fold Changes for Genes from HSV1 KEGG Pathway
+*Figure S4B*
+
 Calculated for oHSV+Trab compared to oHSV alone. 
 
 ```{r antiviraltbl, dependson = "deg-trt-0", fig.width=20}
@@ -1010,6 +824,9 @@ antiviralFC <- FindMarkers(A673_hsv_comb_even,
                            ident.2 = "2 - oHSV",
                            logfc.threshold = 0) 
 antiviralFC <- antiviralFC[order(-abs(antiviralFC$avg_log2FC)),]
+
+write.csv(antiviralFC,
+          file = "Data/FigureS4B_A673_hsv_comb_even_antiviralFC.csv")
 
 # Create interactive datatable showing DEG list
 DT::datatable(antiviralFC[order(antiviralFC$avg_log2FC),], 
