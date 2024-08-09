@@ -743,13 +743,13 @@ for (cell_id in levels(krecurlustered)) {
 
     #### KEGG analysis ####
     # find DEGs with |logfc| > 0.05 and arrange in decreasing order
-    trtdiff <- FindMarkers(cell_type,
+    trtdiff_k7m2 <- FindMarkers(cell_type,
                            ident.1 = "4 - oHSV+Trabectedin",
                            ident.2 = "2 - oHSV",
                            logfc.threshold = 0.05,
                            only.pos = F) %>%
       arrange(-abs(avg_log2FC))
-    print(head(trtdiff, n=20))
+    print(head(trtdiff_k7m2, n=20))
     # Plot top 10 DEGs
     pdf(paste0("Plots/K7M2_2/",
                cell_id,
@@ -757,7 +757,7 @@ for (cell_id in levels(krecurlustered)) {
         height = 15,
         width = 15)
     print(VlnPlot(cell_type,
-                  features = head(rownames(trtdiff)),
+                  features = head(rownames(trtdiff_k7m2)),
                   group.by = "treatment",
                   cols = c("grey",
                            "darkblue",
@@ -767,36 +767,36 @@ for (cell_id in levels(krecurlustered)) {
           )
     dev.off()
     # put DEG output into proper form for kegg analysis
-    trtdiff <- as.data.frame(trtdiff)
-    trtdiff <- arrange(trtdiff, desc(avg_log2FC))
-    degs <- as.vector(trtdiff$avg_log2FC)
-    names(degs) <- rownames(trtdiff) %>%
+    trtdiff_k7m2 <- as.data.frame(trtdiff_k7m2)
+    trtdiff_k7m2 <- arrange(trtdiff_k7m2, desc(avg_log2FC))
+    degs_k7m2 <- as.vector(trtdiff_k7m2$avg_log2FC)
+    names(degs_k7m2) <- rownames(trtdiff_k7m2) %>%
       str_replace("HSV1-","")
     # convert gene names to entrezid
     conversion <-
-      clusterProfiler::bitr(geneID = names(degs),
+      clusterProfiler::bitr(geneID = names(degs_k7m2),
                             fromType = "SYMBOL",
                             toType = "ENTREZID",
                             OrgDb = "org.Mm.eg.db")
     # put proper gene names into correct format to input into kegg analysis
-    keggdegs <-
-      as.data.frame(degs) %>%
+    keggdegs_k7m2 <-
+      as.data.frame(degs_k7m2) %>%
       rownames_to_column("SYMBOL") %>%
       inner_join(conversion,
                  by = "SYMBOL") %>%
-      pull(degs,
+      pull(degs_k7m2,
            name = ENTREZID)
     # perform kegg pathway analysis and visualize
-    gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
+    gsea_KEGG_k7m2 <- clusterProfiler::gseKEGG(keggdegs_k7m2,
                                           organism = "mmu",
                                           eps = 0)
-    gsea_KEGG <- mutate(gsea_KEGG,
+    gsea_KEGG_k7m2 <- mutate(gsea_KEGG_k7m2,
                         p.adjust = -log10(p.adjust))
     #### Plot ####
-    if (nrow(gsea_KEGG) > 0) {
+    if (nrow(gsea_KEGG_k7m2) > 0) {
       # Bar plot
       keggplots[["KEGG_Bar"]][[cell_id]] <- 
-        barplot.enrichResult(gsea_KEGG,
+        barplot.enrichResult(gsea_KEGG_k7m2,
                              font.size=8,
                              label_format=15) +
         labs(title = "Enrichment of Pathways in Combination Therapy",
@@ -805,7 +805,7 @@ for (cell_id in levels(krecurlustered)) {
       print(keggplots[["KEGG_Bar"]][[cell_id]])
       
       # Bar Plot 2
-      keggplots[["KEGG_Bar2"]][[cell_id]] <- arrange(gsea_KEGG,
+      keggplots[["KEGG_Bar2"]][[cell_id]] <- arrange(gsea_KEGG_k7m2,
                                                     abs(NES)) %>% 
         group_by(sign(NES)) %>%
         ggplot(aes(NES,
@@ -824,7 +824,7 @@ for (cell_id in levels(krecurlustered)) {
       print(keggplots[["KEGG_Bar2"]][[cell_id]])
       
       # heatplot
-      gsea_KEGG_symbol <- setReadable(gsea_KEGG,
+      gsea_KEGG_symbol <- setReadable(gsea_KEGG_k7m2,
                                       'org.Mm.eg.db',
                                       'ENTREZID')
       pdf(file = paste0("Plots/K7M2_2/",
@@ -833,7 +833,7 @@ for (cell_id in levels(krecurlustered)) {
           height = 10,
           width = 20)
       print(heatplot(gsea_KEGG_symbol,
-               foldChange = keggdegs,
+               foldChange = keggdegs_k7m2,
                showCategory = 30) + 
               scale_fill_gradient2(low="#357EBDFF",
                                    mid = "lightgrey",
@@ -844,7 +844,7 @@ for (cell_id in levels(krecurlustered)) {
             )
       dev.off()
       #save enrichment object
-      pathwayenrich[["KEGG"]][[cell_id]] <- gsea_KEGG
+      pathwayenrich[["KEGG"]][[cell_id]] <- gsea_KEGG_k7m2
     } else {
       # if no signficant pathways are found, state this in (empty) output plot
       nohits <-
