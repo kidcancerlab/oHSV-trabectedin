@@ -45,11 +45,12 @@ lapply(my_dirs[file.exists(my_dirs) == FALSE], function(x) dir.create(x))
 
 ## Normalize and Process
 
-```{r process, fig.height=3, fig.width=3, dependson="lib"}
+```{r process, fig.height=3, fig.width=3}
 # Set seed
 set.seed(888)
 
 # Load the two A673 datasets
+## From 'HSVref_A673.Rmd' and 'HSVref_A673_human-immune-samples.Rmd
 load("Data/tumor-only-A673_hsv_rep1_even-labeled.RData")
 load("Data/tumor-immune-A673_hsv_rep2_even-labeled.RData")
 
