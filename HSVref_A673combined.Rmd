@@ -654,47 +654,7 @@ if (nrow(gsea_KEGG) > 0) {
           labs(title = "Enrichment of Pathways in Combination Therapy",
                subtitle = "KEGG Gene Sets from A673 (No logFC cutoff)")
   )
-  # Plot distribution of enrichment 
-  pdf("Plots/A673_comb/ridgeplot_kegg_nocutoff.pdf",
-      height = 8,
-      width = 8)
-  print(enrichplot::ridgeplot(gsea_KEGG,
-                              showCategory = 25,
-                              fill = "NES") +
-          labs(x = "Enrichment Distribution",
-               title = "Enrichment of Pathways in Combination Therapy",
-               subtitle = "KEGG Gene Sets from A673 (No logFC cutoff)")
-  )
-  dev.off()
-  
-  # view in rmd
-  print(enrichplot::ridgeplot(gsea_KEGG,
-                              showCategory = 25,
-                              fill = "NES") +
-          labs(x = "Enrichment Distribution",
-               title = "Enrichment of Pathways in Combination Therapy",
-               subtitle = "KEGG Gene Sets from A673 (No logFC cutoff)")
-  )
-  
-  # Plot overlap of enriched pathways
-  set.seed(888)
-  jc_gsea_KEGG <- enrichplot::pairwise_termsim(gsea_KEGG,
-                                               method = "JC",
-                                               semData = NULL,
-                                               showCategory = 200)
-  pdf("Plots/A673_comb/emapplot_kegg_nocutoff.pdf",
-      height = 8,
-      width = 8)
-  set.seed(88)
-  print(enrichplot::emapplot(jc_gsea_KEGG,
-                             showCategory	= 20,
-                             min_edge = 0.1,
-                             color = "NES",
-                             repel = FALSE,
-                             group_category = FALSE)
-  )
-  dev.off()
-  
+
 } else {
   print(ggplot(tibble(x = "A", y = "A",
                       text = "No significant hits"),
