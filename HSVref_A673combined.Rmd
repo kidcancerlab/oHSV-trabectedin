@@ -669,29 +669,19 @@ if (nrow(gsea_KEGG) > 0) {
 
 #### Figure 2G ####
 # Look at GSEA enrichment for HSV pathway (hsa05168)
-enrichplot::gseaplot(gsea_KEGG,
-                     by = "all",
-                     title = "Herpes simplex virus 1 infection",
-                     geneSetID = "hsa05168")
-enrichplot::gseaplot2(gsea_KEGG,
-                     title = "Herpes simplex virus 1 infection",
-                     geneSetID = "hsa05168",
-                     pvalue_table = T)
+kegghsv_plot1 <- enrichplot::gseaplot(gsea_KEGG,
+                                      by = "all",
+                                      title = "Herpes simplex virus 1 infection",
+                                      geneSetID = "hsa05168")
+kegghsv_plot2 <- enrichplot::gseaplot2(gsea_KEGG,
+                                       title = "Herpes simplex virus 1 infection",
+                                       geneSetID = "hsa05168",
+                                       pvalue_table = T)
 # save as pdf
-pdf(file = "Plots/A673_comb/Figure2G_gsea_curve_hsv_nocutoff.pdf",
-    height = 10,
-    width = 5)
-enrichplot::gseaplot(gsea_KEGG,
-                     by = "all",
-                     title = "Herpes simplex virus 1 infection",
-                     geneSetID = "hsa05168")
-enrichplot::gseaplot2(gsea_KEGG,
-                     title = "Herpes simplex virus 1 infection",
-                     geneSetID = "hsa05168",
-                     pvalue_table = T)
+pdf(file = "Plots/A673_comb/Figure2G_gsea_curve_hsv_nocutoff.pdf")
+kegghsv_plot1
+kegghsv_plot2
 dev.off()
-
-
 
 # Map onto pathway
 gene <- names(keggdegs)[abs(keggdegs) > 0.25]
