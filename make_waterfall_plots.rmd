@@ -20,8 +20,8 @@ library(purrr)
 # Set-up Directory
 ```{bash mkdirs, echo=TRUE}
 for directoryName in \
-    Output \
-    Figures
+    Data/Waterfall \
+    Plots
 do
     if [ ! -d ${directoryName} ]
     then
@@ -164,14 +164,16 @@ calc_resp <- function(df) {
 These files were initially prism files that I converted to csv's in order to easily clean and reformat in excel.
 ```{r}
 #Create variable to store different experiment names
-experiments <- list.files("Input")
+experiments <- list.files("Input_for_Waterfall_Plots")
 #List to hold each experiment's combined dataframe
 dfs_list <- list()
 #Loop through experiments to download files
 for(i in experiments) {
     #Var to hold sheets
-    sheets <- paste("Input", i, list.files(paste0("Input/", i)), sep = "/")
-
+    sheets <- paste("Input_for_Waterfall_Plots",
+                    i,
+                    list.files(paste0("Input_for_Waterfall_Plots/", i)),
+                    sep = "/")
     sheet_df <- data.frame()
     #Loop through all sheets in each experiment
     for (k in sheets) {
@@ -208,7 +210,7 @@ Now that the data is loaded in and organized, I will generate a waterfall plot d
 summarized_dfs_list <- lapply(dfs_list, calc_resp)
 summarized_dfs_list <- lapply(summarized_dfs_list, summarized_df)
 plots <- lapply(summarized_dfs_list, make_wtrfall_plot)
-pdf("Figures/waterfall_plots.pdf")
+pdf("Plots/waterfall_plots.pdf")
 print(plots)
 dev.off()
 ```
@@ -237,7 +239,7 @@ for (trt_id in names(summarized_dfs_list)) {
     as.data.frame()
 }
 
-capture.output(resp_counts, file = "resp_counts.txt")
+capture.output(resp_counts, file = "Data/Waterfall/resp_counts.txt")
 ```
 
 ## Pairwise Fisher Tests
@@ -255,7 +257,7 @@ fisher_tests <- lapply(summarized_dfs_list, function(x) {
 })
 write_xlsx(
     x = fisher_tests,
-    path = "Output/fisher_test.xlsx"
+    path = "Data/Waterfall/fisher_test.xlsx"
 )
 
 #Generate list of tables with responses (disease control) for each treatment in each experiment
