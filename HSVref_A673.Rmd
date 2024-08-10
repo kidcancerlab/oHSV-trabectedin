@@ -26,9 +26,7 @@ knitr::opts_chunk$set(
 ```{r lib, cache = FALSE}
 library(Seurat)
 library(tidyverse)
-library(ggsci)
 library(rrrSingleCellUtils)
-library(ggplot2)
 library(patchwork)
 source("scSeurat-addhsv.R")
 
