@@ -523,7 +523,7 @@ print(feature)
 
 # Save as pdf
 pdf("Plots/A673_comb/Figure2E_featureplot_time.pdf",
-    height = 12.5,
+    height = 11.8,
     width = 8.25)
 print(feature)
 dev.off()
