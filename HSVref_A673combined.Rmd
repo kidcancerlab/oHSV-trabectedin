@@ -568,16 +568,32 @@ hsv_DEG <- FindMarkers(A673_hsv_comb_even,
                        logfc.threshold = 0,
                        min.pct = 0,
                        only.pos = F)
-hsv_DEG
 
 # Save
 write.csv(hsv_DEG,
           file = "Data/FigureS4A_A673_hsv_gene_exp.csv")
 ```
 
-# Antiviral Analysis
+```{r timeexp-deg, dependson = c("hsv_timepoints", "timeexp")}
+# Create interactive datatable showing DEG list
+#trtdiff <- as.data.table(trtdiff)
+DT::datatable(hsv_DEG, 
+              rownames = TRUE,
+              extensions = c('FixedColumns',
+                             'Buttons'),
+              options = list(
+                pageLength = 10,
+                scrollX = TRUE,
+                scrollCollapse = TRUE,
+                dom = 'Bfrtip',
+                buttons = c('copy',
+                            'csv',
+                            'excel')
+              ))
+dev.off()
+```
 
-## Gene List
+# Antiviral Analysis
 
 ## Differential Gene Expression and Gene Set Enrichment Analysis
 *Figure 2G*,
@@ -711,6 +727,13 @@ save(gsea_KEGG,
      file = "Data/gsea_KEGG__A673_nocutoff.RData")
 ```
 
+### HSV1 KEGG pathway gene expression
+
+*Figure S4B*
+
+Differential gene expression from the KEGG HSV1 infection pathway,
+based on those genes highlighted in the cellular pathview function
+
 ```{r wholehsvpath_exp, dependson = "deg-trt-0"}
 # Generate list of all genes in the HSV1 pathway plot (hsa05168)
 hsa05168_genelist <- hsa05168$plot.data.gene[["labels"]]
@@ -757,7 +780,6 @@ dev.off()
 ```
 
 #### Fold Changes for Genes from HSV1 KEGG Pathway
-*Figure S4B*
 
 Calculated for oHSV+Trab compared to oHSV alone. 
 
@@ -773,7 +795,8 @@ antiviralFC <- FindMarkers(A673_hsv_comb_even,
                            features = backconversion[["SYMBOL"]],
                            ident.1 = "4 - oHSV+Trabectedin",
                            ident.2 = "2 - oHSV",
-                           logfc.threshold = 0) 
+                           logfc.threshold = 0,
+                           only.pos = F) 
 antiviralFC <- antiviralFC[order(-abs(antiviralFC$avg_log2FC)),]
 
 write.csv(antiviralFC,
