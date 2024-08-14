@@ -593,7 +593,7 @@ nk_t <- subset(krecurlustered,
                idents = c("NK cells",
                           "CD8 T cells",
                           "Prolif NK and T cells",
-                          "Activated NK and T cells",
+                          "Activated NK and CD8 T cells",
                           "Tregs",
                           "CD4 T cells"))
 myeloid <- subset(krecurlustered,
