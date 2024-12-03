@@ -1,6 +1,6 @@
 ---
-title: "Repeat K7M2 scRNAseq with HSV exon reference"
-author: "Emily Franz"
+title: "K7M2 scRNAseq with HSV exon reference"
+author: "Emily Ringwalt"
 date: "`r format(Sys.time(), '%m/%d/%Y')`"
 output: 
   html_document:
@@ -99,11 +99,14 @@ for (item in sample_names) {
   qcplots[[sample_titles[[item]]]] <- plot1 + plot2 +
     plot_annotation(title = sample_titles[[item]])
   
-  assign(sample_titles[[item]], obj) #makes each sample an individual Seurat obj without overwriting
+  # make each sample an individual Seurat obj without overwriting
+  assign(sample_titles[[item]], obj)
 }
 ```
 
 Look at HSV transcripts vs mt transcripts and HSV transcripts vs nCounts.
+As seen below, there are minimal cells with HSV transcripts present.
+This is likely due to the low sensitivity of mouse cells to HSV infection.
 
 oHSV-treated sample:
 
@@ -176,7 +179,7 @@ mt_max <- c(20,
             20)
 names(mt_max) <- sample_names
 
-# Do not need to plot violin plot since completed this previously to determine the cutoffs used here.
+# Do not need to plot violin plot since completed this previously
 for (item in sample_names) {
   obj <- tenx_load_qc(paste("/gpfs0/home2/gdrobertslab/lab/Counts/",
                             item,
@@ -184,7 +187,7 @@ for (item in sample_names) {
                             sep = ""),
                       mouse_hsv = TRUE,
                       violin_plot = FALSE)
-  
+  # Subset based on the above cutoffs
   obj <- subset(obj,
                 subset = 
                   nCount_RNA < nCount_RNA_max[[item]] &
@@ -270,20 +273,6 @@ DimPlot(K7M2_hsv_even,
   coord_fixed()
 ```
 
-#### Res0.2
-```{r umap2, fig.height=5, fig.width=10, dependson=c("define_samples","load","load-final","downsample","process")}
-K7M2_hsv_even <-
-  FindClusters(K7M2_hsv_even,
-               resolution = 0.2)
-
-DimPlot(K7M2_hsv_even,
-        reduction = "umap",
-        split.by = "treatment",
-        pt.size = 1,
-        label = T) +
-  coord_fixed()
-```
-
 #### Res0.3
 ```{r umap3, fig.height=5, fig.width=10, dependson=c("define_samples","load","load-final","downsample","process")}
 K7M2_hsv_even <-
@@ -312,120 +301,22 @@ DimPlot(K7M2_hsv_even,
   coord_fixed()
 ```
 
-#### Res0.7
-```{r umap7, fig.height=5, fig.width=10, dependson=c("define_samples","load","load-final","downsample","process")}
-K7M2_hsv_even <-
-  FindClusters(K7M2_hsv_even,
-               resolution = 0.7)
-
-DimPlot(K7M2_hsv_even,
-        reduction = "umap",
-        split.by = "treatment",
-        pt.size = 1,
-        label = T) +
-  coord_fixed()
-```
-
-Downsample so there is the same number of cells in each treatment group.
-
 ```{r orig_dim, dependson=c("define_samples","load","load-final","downsample","process")}
 DimPlot(K7M2_hsv_even,
         split.by = "treatment") +
   coord_fixed()
 
+# Save object prior to recursive clustering
 save(K7M2_hsv_even,
      file = "Data/K7M2_hsv_even_rep2.RData")
 ```
 
-# Cell Identities
-
-## DGEA by Cluster
-
-Differentially Expressed Genes by Cluster (res0.3):
-
-```{r deg, dependson = c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
-Idents(K7M2_hsv_even) <- K7M2_hsv_even$RNA_snn_res.0.5
-K7M2_hsv_markers <- FindAllMarkers(K7M2_hsv_even,
-                                   min.pct = 0.25,
-                                   logfc.threshold = 0.25,
-                                   only.pos = T)
-```
-
-```{r degt, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","deg")}
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
-# Print top 10 in each cluster
-K7M2_hsv_markers %>%
-  group_by(cluster) %>%
-  top_n(n = 10, wt = avg_log2FC) -> t
-
-# Get dataframe into proper format 
-t <- as.data.frame(t)
-t$cluster <- as.numeric(as.character(t$cluster))
-t <- t[order(t$cluster),]
-t <- t[,c(7, 1:6)]
-t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
-
-# Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(t, 
-              rownames = FALSE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 10,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
-```
-
-## DGEA between treatment groups
-
-```{r degt-trt, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","deg")}
-Idents(K7M2_hsv_even) <- K7M2_hsv_even$treatment
-K7M2_hsv_markers <- FindAllMarkers(K7M2_hsv_even,
-                                   min.pct = 0.25,
-                                   logfc.threshold = 0.25,
-                                   only.pos = F)
-
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
-# Print top 10 in each cluster
-K7M2_hsv_markers %>%
-  group_by(cluster) %>%
-  top_n(n = 10, wt = avg_log2FC) -> t
-
-# Get dataframe into proper format 
-t <- as.data.frame(t)
-#t$cluster <- as.numeric(as.character(t$cluster))
-#t <- t[order(t$cluster),]
-t <- t[,c(7, 1:6)]
-t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
-
-# Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(t, 
-              rownames = FALSE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 10,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
-```
-
-# Try recursive clustering
+# Use Recursive Clustering
+*Figure S6B*
 
 ```{r recurl, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
 # Load the function code (developed by Matthew Cannon)
-source("/gpfs0/home2/gdrobertslab/lab/Analysis/Matt/10xRNAatac/test1/recurl.R")
+source("recurl.R")
 
 # Rename res metadata so does not get overwritten
 K7M2_hsv_even[["res0.1"]] <- K7M2_hsv_even$RNA_snn_res.0.1
@@ -438,6 +329,7 @@ krecurlustered <-
                 do_plots = TRUE,
                 parallel = FALSE)
 
+# Perform standard processing
 krecurlustered <- 
   ScaleData(krecurlustered) %>%
   FindVariableFeatures() %>%
@@ -445,20 +337,30 @@ krecurlustered <-
   FindNeighbors(dims = 1:17) %>%
   RunUMAP(dims = 1:17)
 
+# Save the object after recursive clustering
 save(krecurlustered,
      file = "Data/K7M2_hsv_even_rep2_recurl.RData")
 ```
 
+Plot the output from recursive clustering. Note on naming: first number is the 
+1st layer, the next number is the clusters resulting from isolating and 
+clustering that first group, and so on. So cluster 0.2.1 is the final cluster 
+isolating cluster 0 from the first iteration of clustering, then re-clustering 
+cluster 0 and isolating cluster 2 from within cluster 0, then re-clustering 
+cluster 2 from within cluster 0 and isolating cluster 1 from that output.
+
 ```{r recurl-plot, fig.height=5, fig.width=10, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","recurl")}
 library(Polychrome)
-# Create color palette
+# Create color palette for easier visualization of clusters
 par(mfrow=c(2,3),
     mar=c(0.5,0.5,0.5,0.5))
 C50_29 = createPalette(50,
                        c("#ff0000", "#ffff00", "#00ff00", "#0000ff"),
                        range = c(20, 90))
 
-pdf("Plots/krecurlustered_level2.pdf",
+#### Figure S6B ####
+# Save as a pdf
+pdf("Plots/K7M2_2/FigureS6B_krecurlustered_level2.pdf",
     height = 10,
     width = 12)
 DimPlot(krecurlustered,
@@ -468,6 +370,7 @@ DimPlot(krecurlustered,
   ggtitle("Recursive Clustering Assignment")
 dev.off()
 
+# Visualize in Rmd html ouput
 DimPlot(krecurlustered,
         cols = unname(C50_29))
 
@@ -477,36 +380,6 @@ DimPlot(krecurlustered,
         #label = TRUE,
         repel = TRUE,
         split.by = "treatment")
-
-DimPlot(K7M2_hsv_even,
-        group.by = "RNA_snn_res.0.5",
-        label = TRUE,
-        repel = TRUE,
-        split.by = "treatment")
-
-DotPlot(K7M2_hsv_even,
-        features = c("Birc2",
-                     "Birc3",
-                     "Tyk2",
-                     "Socs3",
-                     "Jak1",
-                     "Jak2",
-                     "Eif2ak2"),
-        scale = F,
-        cols = "Spectral") +
-  RotatedAxis()
-
-DotPlot(krecurlustered,
-        features = c("Birc2",
-                     "Birc3",
-                     "Tyk2",
-                     "Socs3",
-                     "Jak1",
-                     "Jak2",
-                     "Eif2ak2"),
-        scale = F,
-        cols = "Spectral") +
-  RotatedAxis()
 ```
 
 ```{r recurl-deg, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","recurl")}
@@ -516,7 +389,6 @@ krecurlustered_markers <- FindAllMarkers(krecurlustered,
                                          logfc.threshold = 0.25,
                                          only.pos = F)
 
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
 # Print top 10 in each cluster
 krecurlustered_markers %>%
   group_by(cluster) %>%
@@ -524,11 +396,8 @@ krecurlustered_markers %>%
 
 # Get dataframe into proper format 
 t <- as.data.frame(t)
-#t$cluster <- as.numeric(as.character(t$cluster))
-#t <- t[order(t$cluster),]
 t <- t[,c(7, 1:6)]
 t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
 
 # Create interactive datatable showing top 10 DEG in each cluster 
 DT::datatable(t, 
@@ -546,20 +415,10 @@ DT::datatable(t,
               ))
 ```
 
-### Markers for Paper
-
-```{r markedpaper,fig.height=5, fig.width=10,}
-VlnPlot(krecurlustered,
-        features = c("Xcl1",
-                     "Gzma",
-                     "Gzmb"),
-        group.by = "treatment",
-        log = T)
-```
-
 # Assign Cell Identities
 
 ## SingleR Cell Predictions
+*Figure S6A*
 
 This is an automatic prediction method for cell types. Here, I specifically use the SingleR mouse immune reference for predicted cell assignment of cell clusters. Often this method is a general assignment and may miss more specific cell subtypes, especially for macrophages.
 
@@ -598,7 +457,7 @@ maxv <- apply(Tumor_hsv_pred_types$scores,
 hist(maxv,
      n = 200)
 
-krecurlustered$singleRscore <- maxv  #scores may be a matrix
+krecurlustered$singleRscore <- maxv
 
 as.data.frame(krecurlustered@meta.data) %>%
   as_tibble() %>%
@@ -606,15 +465,18 @@ as.data.frame(krecurlustered@meta.data) %>%
   geom_histogram(bins = 200) +
   facet_wrap(~singleR2,
              ncol = 3,
-             scales = "free_y") #****
-  
+             scales = "free_y")
+
 table(krecurlustered$singleR2,
       krecurlustered$treatment)
 ```
 
-```{r singlr_plot, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
-Idents(krecurlustered) <- krecurlustered$singleR2 
+```{r singlr_plot, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr", "singler_cont")}
+# Label cells with singleR cell types
+Idents(krecurlustered) <- krecurlustered$singleR2
+
 # Plot
+## Reconcile same cell type, but different names from the two references used
 krecurlustered <- 
   RenameIdents(krecurlustered,
                "Dendritic cells" = "DC") %>%
@@ -628,7 +490,9 @@ DimPlot(krecurlustered,
   coord_fixed() +
   ggtitle("Mouse Reference")
 
-pdf("Plots/K7M2_2/singlr.pdf",
+#### Figure S6A ####
+## Save as pdf
+pdf("Plots/K7M2_2/FigureS6A_singlr.pdf",
     height = 10,
     width = 10)
 r_dim_plot(krecurlustered,
@@ -642,39 +506,13 @@ r_dim_plot(krecurlustered,
 dev.off()
 ```
 
-```{r singlr_plot2, fig.width=12, fig.height=5, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample","singlr")}
-# Rename cell ids
-krecurlustered <- 
-  RenameIdents(krecurlustered,
-               "Dendritic cells" = "DC",
-               "Tgd" = "T cells",
-               "Stem cells" = "Tumor cells",
-               "Granulocytes" = "Neutrophils",
-               "Erythrocytes" = "Tumor cells",
-               "Adipocytes" = "Tumor cells",
-               "Fibroblasts" = "Tumor cells") %>%
-  StashIdent(save.name = "SingleR2ed")
-
-k7m2_ids <- r_dim_plot(krecurlustered,
-                       reduction = "umap",
-                       pt.size = 0.5,
-                       label = T,
-                       repel = T,
-                       split.by = "treatment") +
-  coord_fixed() +
-  ggtitle("Mouse Reference")
-k7m2_ids
-
-pdf("Plots/K7M2_2/k7m2_renamesinglr_split.pdf",
-    height = 10,
-    width = 20)
-k7m2_ids
-dev.off()
-```
-
 ### Label cell identities
+*Figure 4A*
 
-```{r cellname}
+*Figure S6C*
+
+```{r cellname, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample")}
+# Using the above SingleR cell assignments, apply these to recurl clusters
 krecurlustered$cell_ids <-
   str_replace_all(krecurlustered$clust_3,
                   c(
@@ -688,7 +526,7 @@ krecurlustered$cell_ids <-
                     "clust_2.0.." = "NK cells",
                     "clust_2.2.." = "CD8 T cells",
                     "clust_2.4.." = "Prolif NK and T cells",
-                    "clust_2.1.." = "Activated NK and CD8 T cells",
+                    "clust_2.1.." = "Activated NK and T cells",
                     "clust_2.5.." = "Tregs",
                     "clust_2.6.." = "CD4 T cells",
                     "clust_3.1.." = "Endothelial cells",
@@ -702,32 +540,53 @@ krecurlustered$cell_ids <-
                     "clust_1.0.2" = "Macrophages"
                   )) 
 
+# Plot and save
+#### Figure 4A ####
 labeled_dim <- r_dim_plot(krecurlustered,
                           group.by = "cell_ids",
-                          label = F,
+                          label = T,
+                          repel = T,
                           shuffle = T,
-                          #repel = T,
-                          split.by = "treatment") +
+                          pt.size = 0.5) +
   coord_fixed() + 
-  ggplot2::theme(legend.position = "right")
+  ggplot2::theme(legend.position = "none")
+labeled_dim
 
-pdf(file = "Plots/K7M2_2/krecurl_cell_ids_dim_2.pdf",
+# Save as pdf
+pdf(file = "Plots/K7M2_2/Figure4A_krecurl_cell_ids_dim.pdf",
     height = 5,
-    width = 20)
+    width = 5)
 labeled_dim
 dev.off()
 
-r_dim_plot(krecurlustered,
-           split.by = "treatment",
-           group.by = "cell_ids") +
-  coord_fixed()
+#### Figure S6C ####
+labeled_dim_trtmnt <- r_dim_plot(krecurlustered,
+                                 split.by = "treatment",
+                                 group.by = "cell_ids",
+                                 label = F,
+                                 shuffle = T,
+                                 pt.size = 0.5) +
+  coord_fixed() + 
+  ggplot2::theme(legend.position = "right")
+labeled_dim_trtmnt
+
+# Save as pdf
+pdf(file = "Plots/K7M2_2/FigureS6C_krecurl_cell_ids_dim_bytrtmnt.pdf",
+    height = 5,
+    width = 20)
+labeled_dim_trtmnt
+dev.off()
 ```
 
-```{r anysubset2}
+### Plot composition of major cell groups
+*Figure S6D*
+
+```{r anysubset2, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample")}
 library(dittoSeq)
 # set idents 
 Idents(krecurlustered) <- krecurlustered$cell_ids
-# subset cells
+
+# subset cells based on identity
 tumor <- subset(krecurlustered,
                 idents = "Tumor cells")
 nk_t <- subset(krecurlustered,
@@ -760,11 +619,6 @@ for (celltype in names(subsets)) {
   # Display overall cell count prior to downsampling
   table(subsets[[celltype]]$treatment) %>%
     print()
-  # show cell quantities
-  print(dittoBarPlot(subsets[[celltype]],
-                     var = "cell_ids",
-                     group.by = "treatment")) +
-    ggtitle(celltype)
   # Subset the highest number that makes all treatment groups equal in cell number
   type <-
     subset(subsets[[celltype]],
@@ -778,208 +632,28 @@ for (celltype in names(subsets)) {
   assign(paste0(celltype,
                 "_downsampled"),
          type)
-  # show cell quantities
+  # Plot cell type proportions as a barplot
   print(dittoBarPlot(subsets[[celltype]],
                      var = "cell_ids",
                      group.by = "treatment",
                      data.out = TRUE))
+  #### Figure S6D ####
+  ## Save as pdf
   pdf(paste0("Plots/K7M2_2/",
              celltype,
-             "cellgroup_subsets.pdf"))
+             "FigureS6D_cellgroup_subsets.pdf"))
   print(dittoBarPlot(subsets[[celltype]],
                      var = "cell_ids",
                      group.by = "treatment"))
   dev.off()
-  ## Plot
-  print(
-    DimPlot(type,
-            split.by = "treatment") +
-    ggtitle(paste(celltype, "Cells"))
-  )
 }
-```
-
-### Analyze T and NK Cytotoxicity Expression
-
-```{r nktsubsets}
-# set idents 
-Idents(krecurlustered) <- krecurlustered$cell_ids
-# subset cells
-nk <- subset(krecurlustered,
-             idents = "NK cells")
-cd8t <- subset(krecurlustered,
-               idents = "CD8 T cells")
-activ_nkt <- subset(krecurlustered,
-                    idents = "Activated NK and CD8 T cells")
-prolif_nkt <- subset(krecurlustered,
-                    idents = "Prolif NK and T cells")
-
-subsets <- list(NK = nk,
-                CD8_T = cd8t,
-                Activated_NK_T = activ_nkt,
-                Prolif_NK_T = prolif_nkt)
-
-for (celltype in names(subsets)) {
-  # Set seed before random downsampling
-  set.seed(132)
-  Idents(subsets[[celltype]]) <- subsets[[celltype]]$treatment
-  print(celltype)
-  print(table(subsets[[celltype]]$treatment))
-  # Subset the highest number that makes all treatment groups equal in cell number
-  type <-
-    subset(subsets[[celltype]],
-           downsample = table(subsets[[celltype]]$treatment) %>%
-             min())
-  ## Check that worked: cell numbers across treatments should be equal
-  print(paste("Downsampled",
-              celltype))
-  print(table(type$treatment))
-  # Label cells by treatment group
-  Idents(type) <- type$treatment
-  # Assign to an object
-  assign(celltype, type)
-  ## Plot
-  print(DimPlot(type,
-                split.by = "treatment"))
-  ## Plot granzyme expression
-  pdf(paste0("Plots/K7M2_2/",
-             celltype,
-             "_GzmVln",
-             ".pdf"),
-      height = 14,
-      width = 10)
-  print(VlnPlot(type,
-                features = c("Gzmd",
-                             "Gzme",
-                             "Gzmc",
-                             "Gzmf",
-                             "Gzmg",
-                             "Gzma",
-                             "Gzmb",
-                             "Prf1",
-                             "Xcl1"),
-                log = T,
-                split.by = "treatment",
-                group.by = "treatment",
-                cols = c("grey", "darkblue", "orangered", "purple"))
-        )
-  dev.off()
-}
-```
-
-Find and plot immune genes of interest 
-
-```{r granzymes, fig.height = 11,fig.width=9,dependson="anysubset2"}
-#Granzymes
-Idents(nk_t) <- nk_t$treatment
-nkt_markers <- FindMarkers(nk_t,
-                           ident.1 = "4 - oHSV+Trabectedin",
-                           ident.2 = "2 - oHSV",
-                           min.pct = 0,
-                           logfc.threshold = 0,
-                           features = c("Gzmd",
-                                        "Gzme",
-                                        "Gzmc",
-                                        "Gzmf",
-                                        "Gzmg",
-                                        "Gzma",
-                                        "Gzmb",
-                                        "Prf1",
-                                        "Xcl1"),
-                           only.pos = T)
-
-# Hard to work with this function/datatable so this step removes genes not in the top 100 DEG for all clusters 
-nkt_markers %>%
-  group_by(cluster) %>%
-  top_n(n = 100, wt = avg_log2FC) -> t
-
-# Get dataframe into proper format 
-t <- as.data.frame(t)
-#t$cluster <- as.numeric(as.character(t$cluster))
-#t <- t[order(t$cluster),]
-t <- t[,c(7, 1:6)]
-t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
-
-# Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(t, 
-              rownames = FALSE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 15,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
-
-# Plot genes of interest
-VlnPlot(nk_t,
-        features = c("Gzmd",
-                     "Gzme",
-                     "Gzmc",
-                     "Gzmf",
-                     "Gzmd",
-                     "Gzma",
-                     "Gzmb",
-                     "Xcl1"),
-        log = T,
-        split.by = "treatment",
-        cols = c("grey", "darkblue", "orangered", "purple"))
-
-pdf("Plots/K7M2_2/nk_t-gzms.pdf",
-    height = 14,
-    width = 10)
-VlnPlot(nk_t,
-        features = c("Gzmd",
-                     "Gzme",
-                     "Gzmc",
-                     "Gzmf",
-                     "Gzmg",
-                     "Gzma",
-                     "Gzmb",
-                     "Prf1",
-                     "Xcl1"),
-        log = T,
-        split.by = "treatment",
-        cols = c("grey", "darkblue", "orangered", "purple"))
-dev.off()
-
-FoldChange(nk_t,
-           ident.1 = "4 - oHSV+Trabectedin",
-           ident.2 = "2 - oHSV",
-           features = c("Gzmd",
-                        "Gzme",
-                        "Gzmc",
-                        "Gzmf",
-                        "Gzmg",
-                        "Gzma",
-                        "Gzmb",
-                        "Prf1",
-                        "Xcl1")) %>%
-  print()
-
-FoldChange(nk_t,
-           ident.1 = "3 - Trabectedin",
-           ident.2 = "1 - Control",
-           features = c("Gzmd",
-                        "Gzme",
-                        "Gzmc",
-                        "Gzmf",
-                        "Gzmg",
-                        "Gzma",
-                        "Gzmb",
-                        "Prf1",
-                        "Xcl1")) %>%
-  print()
 ```
 
 ### Death receptor signaling
+Previously proposed a method of tumor cell killing via TRAIL-TRAILR2 signaling.
+However, below shows minimal expression differences between treatment groups.
 
-```{r fig.height=4, fig.width=9}
+```{r deathrecp, fig.height=4, fig.width=9, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample", "anysubset2")}
 # Death receptor signaling
 Idents(tumor) <- tumor$treatment
 VlnPlot(tumor,
@@ -994,129 +668,22 @@ VlnPlot(nk_t,
                      "Tbx21"),
         log = T,
         split.by = "treatment")
-
-pdf("Plots/K7M2_2/deathreceptors-tumor.pdf",
-    height = 5,
-    width = 10)
-VlnPlot(tumor,
-        features = c("Fas",
-                     "Tnfrsf10b",
-                     "Hspa1a"),
-        log = T,
-        split.by = "treatment")
-dev.off()
-
-pdf("Plots/K7M2_2/deathsignals-nkt.pdf",
-    height = 5,
-    width = 10)
-VlnPlot(nk_t,
-        features = c("Fasl",
-                     "Tnfsf10",
-                     "Tbx21"),
-        log = T,
-        split.by = "treatment")
-dev.off()
-```
-
-```{r nkdegt-trt, dependson="deg", fig.height = 6, fig.width = 15}
-Idents(nk_t) <- nk_t$treatment
-nkt_markers <- FindMarkers(nk_t,
-                           ident.1 = "4 - oHSV+Trabectedin",
-                           ident.2 = "2 - oHSV",
-                           min.pct = 0,
-                           logfc.threshold = 0,
-                           only.pos = T)
-
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
-# Print top 10 in each cluster
-nkt_markers %>%
-  group_by(cluster) %>%
-  top_n(n = 15, wt = avg_log2FC) -> t
-
-# Get dataframe into proper format 
-t <- as.data.frame(t)
-#t$cluster <- as.numeric(as.character(t$cluster))
-#t <- t[order(t$cluster),]
-t <- t[,c(7, 1:6)]
-t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
-
-# Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(t, 
-              rownames = FALSE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 15,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
-```
-
-### nkt closer look
-
-```{r nkdegt-trt, dependson="deg", fig.height = 6, fig.width = 15}
-Idents(nk_t) <- nk_t$treatment
-nkt_markers <- FindAllMarkers(nk_t,
-                              min.pct = 0.25,
-                              logfc.threshold = 0.25,
-                              only.pos = F)
-
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
-# Print top 10 in each cluster
-nkt_markers %>%
-  group_by(cluster) %>%
-  top_n(n = 15, wt = avg_log2FC) -> t
-
-# Get dataframe into proper format 
-t <- as.data.frame(t)
-#t$cluster <- as.numeric(as.character(t$cluster))
-#t <- t[order(t$cluster),]
-t <- t[,c(7, 1:6)]
-t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
-
-# Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(t, 
-              rownames = FALSE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 15,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
-
-DotPlot(nk_t,
-        features = unique(t$gene),
-        group.by = "treatment",
-        scale = FALSE,
-        cols = c("lightgoldenrod", "darkred")) +
-  ggtitle("NK & T cell DEGs between Treatments") +
-  RotatedAxis()
 ```
 
 # Subset Cell ID Analysis
+*Figure 4B - Activated NK and T cells*
 
 Uses krecurlustered subsets
 
-```{r cell_subset, fig.width=10, fig.height=10}
+```{r cell_subset, fig.width=10, fig.height=10, dependson=c("define_samples","load","load-final","downsample","process","umap","downsample", "anysubset2")}
 library(cowplot)
 library(forcats)
 library(ggstance)
 source("enrichplot_codeforbarplot.R")
 library(enrichplot)
 library(DOSE)
-#source("dgea.R")
 
+#### Figure 4B ####
 # Change idents to cell identities
 Idents(krecurlustered) <- krecurlustered$cell_ids
 # Create list for plots
@@ -1173,22 +740,16 @@ for (cell_id in levels(krecurlustered)) {
   # if more then 20 cells per group, perform DEG and pathway analyses
   if (min(table(cell_type$treatment)) > 20) {
     Idents(cell_type) <- cell_type$treatment
-    # perform dgea heatplot analysis
-    # subset(cell_type,
-    #        idents = c("2 - oHSV",
-    #                   "4 - oHSV+Trabectedin")) %>%
-    #   dgea_barplot()
-    # dev.off()
 
     #### KEGG analysis ####
     # find DEGs with |logfc| > 0.05 and arrange in decreasing order
-    trtdiff <- FindMarkers(cell_type,
+    trtdiff_k7m2 <- FindMarkers(cell_type,
                            ident.1 = "4 - oHSV+Trabectedin",
                            ident.2 = "2 - oHSV",
                            logfc.threshold = 0.05,
                            only.pos = F) %>%
       arrange(-abs(avg_log2FC))
-    print(head(trtdiff, n=20))
+    print(head(trtdiff_k7m2, n=20))
     # Plot top 10 DEGs
     pdf(paste0("Plots/K7M2_2/",
                cell_id,
@@ -1196,7 +757,7 @@ for (cell_id in levels(krecurlustered)) {
         height = 15,
         width = 15)
     print(VlnPlot(cell_type,
-                  features = head(rownames(trtdiff)),
+                  features = head(rownames(trtdiff_k7m2)),
                   group.by = "treatment",
                   cols = c("grey",
                            "darkblue",
@@ -1206,48 +767,36 @@ for (cell_id in levels(krecurlustered)) {
           )
     dev.off()
     # put DEG output into proper form for kegg analysis
-    trtdiff <- as.data.frame(trtdiff)
-    trtdiff <- arrange(trtdiff, desc(avg_log2FC))
-    degs <- as.vector(trtdiff$avg_log2FC)
-    names(degs) <- rownames(trtdiff) %>%
+    trtdiff_k7m2 <- as.data.frame(trtdiff_k7m2)
+    trtdiff_k7m2 <- arrange(trtdiff_k7m2, desc(avg_log2FC))
+    degs_k7m2 <- as.vector(trtdiff_k7m2$avg_log2FC)
+    names(degs_k7m2) <- rownames(trtdiff_k7m2) %>%
       str_replace("HSV1-","")
     # convert gene names to entrezid
     conversion <-
-      clusterProfiler::bitr(geneID = names(degs),
+      clusterProfiler::bitr(geneID = names(degs_k7m2),
                             fromType = "SYMBOL",
                             toType = "ENTREZID",
                             OrgDb = "org.Mm.eg.db")
     # put proper gene names into correct format to input into kegg analysis
-    keggdegs <-
-      as.data.frame(degs) %>%
+    keggdegs_k7m2 <-
+      as.data.frame(degs_k7m2) %>%
       rownames_to_column("SYMBOL") %>%
       inner_join(conversion,
                  by = "SYMBOL") %>%
-      pull(degs,
+      pull(degs_k7m2,
            name = ENTREZID)
     # perform kegg pathway analysis and visualize
-    gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
+    gsea_KEGG_k7m2 <- clusterProfiler::gseKEGG(keggdegs_k7m2,
                                           organism = "mmu",
                                           eps = 0)
-    gsea_KEGG <- mutate(gsea_KEGG,
+    gsea_KEGG_k7m2 <- mutate(gsea_KEGG_k7m2,
                         p.adjust = -log10(p.adjust))
     #### Plot ####
-    if (nrow(gsea_KEGG) > 0) {
-      # Dotplot
-      keggplots[["KEGG_Dot"]][[cell_id]] <- 
-        enrichplot::dotplot(gsea_KEGG,
-                            x = "NES",
-                            showCategory = 25,
-                            font.size = 8,
-                            color = "NES") +
-        labs(title = "Enrichment of Pathways in Combination Therapy",
-             subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-      ## print in output
-      print(keggplots[["KEGG_Dot"]][[cell_id]])
-      
+    if (nrow(gsea_KEGG_k7m2) > 0) {
       # Bar plot
       keggplots[["KEGG_Bar"]][[cell_id]] <- 
-        barplot.enrichResult(gsea_KEGG,
+        barplot.enrichResult(gsea_KEGG_k7m2,
                              font.size=8,
                              label_format=15) +
         labs(title = "Enrichment of Pathways in Combination Therapy",
@@ -1256,7 +805,7 @@ for (cell_id in levels(krecurlustered)) {
       print(keggplots[["KEGG_Bar"]][[cell_id]])
       
       # Bar Plot 2
-      keggplots[["KEGG_Bar2"]][[cell_id]] <- arrange(gsea_KEGG,
+      keggplots[["KEGG_Bar2"]][[cell_id]] <- arrange(gsea_KEGG_k7m2,
                                                     abs(NES)) %>% 
         group_by(sign(NES)) %>%
         ggplot(aes(NES,
@@ -1275,7 +824,7 @@ for (cell_id in levels(krecurlustered)) {
       print(keggplots[["KEGG_Bar2"]][[cell_id]])
       
       # heatplot
-      gsea_KEGG_symbol <- setReadable(gsea_KEGG,
+      gsea_KEGG_symbol <- setReadable(gsea_KEGG_k7m2,
                                       'org.Mm.eg.db',
                                       'ENTREZID')
       pdf(file = paste0("Plots/K7M2_2/",
@@ -1284,7 +833,7 @@ for (cell_id in levels(krecurlustered)) {
           height = 10,
           width = 20)
       print(heatplot(gsea_KEGG_symbol,
-               foldChange = keggdegs,
+               foldChange = keggdegs_k7m2,
                showCategory = 30) + 
               scale_fill_gradient2(low="#357EBDFF",
                                    mid = "lightgrey",
@@ -1295,7 +844,7 @@ for (cell_id in levels(krecurlustered)) {
             )
       dev.off()
       #save enrichment object
-      pathwayenrich[["KEGG"]][[cell_id]] <- gsea_KEGG
+      pathwayenrich[["KEGG"]][[cell_id]] <- gsea_KEGG_k7m2
     } else {
       # if no signficant pathways are found, state this in (empty) output plot
       nohits <-
@@ -1306,21 +855,21 @@ for (cell_id in levels(krecurlustered)) {
         theme(axis.text = element_text(size = 5)) +
         labs(title = "Enrichment of Pathways in Combination Therapy",
              subtitle = paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-      keggplots[["KEGG_Dot"]][[cell_id]] <- nohits
       keggplots[["KEGG_Bar"]][[cell_id]] <- nohits
       keggplots[["KEGG_Bar2"]][[cell_id]] <- nohits
       # print plots in output
       print(keggplots[["KEGG_Dot"]][[cell_id]])
     }
 
+    # Save plots as PDF
     pdf(paste0("Plots/K7M2_2/",
                cell_id,
-               "_KEGGenrichmentdot.pdf"),
+               "_KEGGenrichmentbar.pdf"),
         height = 6,
-        width = 8)
-    print(keggplots[["KEGG_Dot"]][[cell_id]])
+        width = 12)
+    print(keggplots[["KEGG_Bar"]][[cell_id]])
     dev.off()
-
+    
     pdf(paste0("Plots/K7M2_2/",
                cell_id,
                "_KEGGenrichmentbar2.pdf"),
@@ -1328,7 +877,7 @@ for (cell_id in levels(krecurlustered)) {
         width = 12)
     print(keggplots[["KEGG_Bar2"]][[cell_id]])
     dev.off()
-
+    
   } else {
     # notify if a cell type has less than 20 cells (excluded from analyses)
     message("Insufficent cell number for ", cell_id)
@@ -1337,277 +886,56 @@ for (cell_id in levels(krecurlustered)) {
 }
 ```
 
--------
+# Analyze T and NK Cytotoxicity Expression
+*Figure 4D*
 
-## Old/Previous work
+```{r granzymes, fig.height = 11,fig.width=9,dependson=c("define_samples","load","load-final","downsample","process","umap","downsample", "anysubset2")}
+#### Figure 4D ####
+Idents(nk_t) <- nk_t$treatment
+# Plot genes of interest
+cytotoxicity_genes <- VlnPlot(nk_t,
+                              features = c("Gzmd",
+                                           "Gzme",
+                                           "Gzmc",
+                                           "Gzmf",
+                                           "Gzmd",
+                                           "Gzma",
+                                           "Gzmb",
+                                           "Prf1",
+                                           "Xcl1"),
+                              log = T,
+                              split.by = "treatment",
+                              cols = c("grey", "darkblue", "orangered", "purple"))
+cytotoxicity_genes
 
-```{r cell_marker, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
-Idents(K7M2_hsv_even) <- K7M2_hsv_even$RNA_snn_res.0.5
-# Classify clusters on well-established cell marker expression
-DotPlot(K7M2_hsv_even,
-        features = c("Ncam1", #NK, CD56
-                     "Klrf1", #NK
-                     "Fcgr3", #NK, CD16
-                     "Cd3d", #T
-                     "Cd3g", #T
-                     "Cd3e", #T
-                     "Cd4", #CD4 T
-                     "Cd8a", #CD8 T
-                     "Cd19", #B cells
-                     "Ms4a1", #B cells
-                     "Lyz1", #Myeloid
-                     "C1qa", #Myeloid
-                     "Cd68", #Myeloid
-                     "Epcam", #Epithelial
-                     "Krt18", #Epithelial
-                     "Krt19", #Epithelial
-                     "Fap"), #Fibroblasts
-        scale = FALSE,
-        cols = c("goldenrod",
-                 "darkred")) +
-  RotatedAxis()
-```
+pdf("Plots/K7M2_2/Figure4D_nk_t-gzms.pdf",
+    height = 14,
+    width = 10)
+cytotoxicity_genes
+dev.off()
 
-```{r cell_marker_ft, fig.height = 12, fig.width = 12, dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
-Idents(K7M2_hsv_even) <- K7M2_hsv_even$RNA_snn_res.0.5
-rrrSingleCellUtils::r_feature_plot(K7M2_hsv_even,
-                                   features = c("Ncam1", #NK, CD56
-                                                "Klrf1", #NK
-                                                "Fcgr3", #NK, CD16
-                                                "Cd3d", #T
-                                                "Cd3g", #T
-                                                "Cd3e", #T
-                                                "Cd4", #CD4 T
-                                                "Cd8a", #CD8 T
-                                                "Cd19", #B cells
-                                                "Ms4a1", #B cells
-                                                "Lyz1", #Myeloid
-                                                "C1qa", #Myeloid
-                                                "Cd68", #Myeloid
-                                                "Epcam", #Epithelial
-                                                "Krt18", #Epithelial
-                                                "Krt19", #Epithelial
-                                                "Fap"), #Fibroblasts
-                                   order = TRUE,
-                                   label = TRUE,
-                                   pt.size = 0.5) +
-  theme(legend.position = "right",
-        aspect.ratio=1)
-```
-
-
-```{r nkt,eval=F}
-Idents(nkt) <- nkt$RNA_snn_res.0.2
-nkt <- 
-  RenameIdents(nkt,
-               "0" = "NK",
-               "1" = "CD4",
-               "2" = "CD8",
-               "3" = "Prolif NK+CD8",
-               "4" = "NK") %>%
-  StashIdent(save.name = "cell_identities")
-
-# Create list for plots
-plots <- list()
-
-Idents(nkt) <- nkt$cell_identities 
-for (cell_id in levels(nkt)) {
-  cell_type <- subset(nkt,
-                      idents = cell_id)
-  Idents(cell_type) <- cell_type$treatment
-  print(table(cell_type$treatment))
-  # set seed
-  set.seed(127)
-  cell_type <- subset(cell_type,
-                      downsample = table(cell_type$treatment) %>%
-                        min())
-  print(paste("Downsampled", cell_id))
-  print(table(cell_type$treatment))
-  if (min(table(cell_type$treatment)) > 25) {
-    assign(cell_id, cell_type)
-    Idents(cell_type) <- cell_type$treatment
-    trtdiff <- FindMarkers(krecurlustered,
+# Calculate fold changes in oHSV+trab vs. oHSV alone
+Idents(nk_t) <- nk_t$treatment
+nkt_markers <- FindMarkers(nk_t,
                            ident.1 = "4 - oHSV+Trabectedin",
                            ident.2 = "2 - oHSV",
+                           min.pct = 0,
                            logfc.threshold = 0,
-                           only.pos = F) %>%
-      arrange(-abs(avg_log2FC))
-    print(head(trtdiff, n=15))
-    
-    pdf(paste0("Plots/K7M2_2/",
-               cell_id,
-               "_topdegs.pdf"),
-        height = 15,
-        width = 15)
-    # or try ggsave?
-    print(VlnPlot(cell_type,
-                  features = head(rownames(trtdiff)),
-                  group.by = "treatment"))
-    dev.off()
-  } else {
-    message("Insufficent cell number for ", cell_id)
-  }
-
-  # Prepare list for gsea analysis
-  trtdiff <- as.data.frame(trtdiff)
-  trtdiff <- arrange(trtdiff, desc(avg_log2FC))
-  degs <- as.vector(trtdiff$avg_log2FC)
-  names(degs) <- rownames(trtdiff) %>%
-    str_replace("HSV1-","")
-  
-  conversion <-
-    clusterProfiler::bitr(geneID = names(degs),
-                          fromType = "SYMBOL",
-                          toType = "ENTREZID",
-                          OrgDb = "org.Mm.eg.db")
-  
-  keggdegs <-
-    as.data.frame(degs) %>%
-    rownames_to_column("SYMBOL") %>%
-    inner_join(conversion, by = "SYMBOL") %>%
-    pull(degs, name = ENTREZID)
-  
-  # Perform gseKEGG analysis
-  gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
-                                        organism = "mmu",
-                                        eps = 0)
-  # log adjust the p values
-  gsea_KEGG <- mutate(gsea_KEGG,
-                      p.adjust = -log10(p.adjust))
-  
-  if (nrow(gsea_KEGG) > 0) {
-    plots[["KEGG"]][[cell_id]] <- 
-    enrichplot::dotplot(gsea_KEGG,
-                        x = "NES",
-                        showCategory = 25,
-                        font.size = 8,
-                        color = "NES") +
-      labs(title = "Enrichment of Pathways in Combination Therapy",
-           subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-  } else {
-    plots[["KEGG"]][[cell_id]] <-
-      ggplot(tibble(x = "A", y = "A",
-                    text = "No significant hits"),
-             aes(x = x, y = y, label = text)) +
-      geom_text() +
-      theme(axis.text = element_text(size = 5)) +
-      labs(title = "Enrichment of Pathways in Combination Therapy",
-           subtitle = paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-  }
-  print(plots[["KEGG"]][[cell_id]])
-}
-```
-
-```{r rename,eval=F}
-K7M2_hsv_even <- 
-  RenameIdents(K7M2_hsv_even,
-               "0" = "Tumor cells",
-               "1" = "Monocytes_Macrophages",
-               "2" = "Tumor cells",
-               "3" = "NK or T cells",
-               "4" = "Tumor cells",
-               "5" = "T cells",
-               "6" = "Stromal_Endothelial cells",
-               "7" = "NK cells",
-               "8" = "Neutrophils",
-               "9" = "Mast cells",
-               "10" = "DC or B cells") %>%
-  StashIdent(save.name = "cell_identities")
-```
-
-### myeloid closer look
-
-```{r myeloid,eval=F}
-myeloid <- subset(myeloid,
-                  downsample = table(myeloid$treatment) %>%
-                    min())
-DimPlot(myeloid,
-        split.by = "treatment")
-
-print(table(myeloid$treatment))
-  if (min(table(myeloid$treatment)) > 25) {
-    Idents(myeloid) <- myeloid$treatment
-    trtdiff <- FindMarkers(myeloid,
-                           ident.1 = "4 - oHSV+Trabectedin",
-                           ident.2 = "2 - oHSV",
-                           logfc.threshold = 0,
-                           only.pos = F) %>%
-      arrange(-abs(avg_log2FC))
-    print(head(trtdiff,
-               n = 15))
-    
-    # Prepare list for gsea analysis
-    trtdiff <- as.data.frame(trtdiff)
-    trtdiff <- arrange(trtdiff, desc(avg_log2FC))
-    degs <- as.vector(trtdiff$avg_log2FC)
-    names(degs) <- rownames(trtdiff) %>%
-      str_replace("HSV1-","")
-    
-    conversion <-
-      clusterProfiler::bitr(geneID = names(degs),
-                            fromType = "SYMBOL",
-                            toType = "ENTREZID",
-                            OrgDb = "org.Mm.eg.db")
-    
-    keggdegs <-
-      as.data.frame(degs) %>%
-      rownames_to_column("SYMBOL") %>%
-      inner_join(conversion, by = "SYMBOL") %>%
-      pull(degs, name = ENTREZID)
-    
-    # Perform gseKEGG analysis
-    gsea_KEGG <- clusterProfiler::gseKEGG(keggdegs,
-                                          organism = "mmu",
-                                          eps = 0)
-    # log adjust the p values
-    gsea_KEGG <- mutate(gsea_KEGG,
-                        p.adjust = -log10(p.adjust))
-    
-    if (nrow(gsea_KEGG) > 0) {
-      plots[["KEGG"]][[cell_id]] <- 
-        enrichplot::dotplot(gsea_KEGG,
-                            x = "NES",
-                            showCategory = 25,
-                            font.size = 8,
-                            color = "NES") +
-        labs(title = "Enrichment of Pathways in Combination Therapy",
-             subtitle =  paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-    } else {
-      plots[["KEGG"]][[cell_id]] <-
-        ggplot(tibble(x = "A", y = "A",
-                      text = "No significant hits"),
-               aes(x = x, y = y, label = text)) +
-        geom_text() +
-        theme(axis.text = element_text(size = 5)) +
-        labs(title = "Enrichment of Pathways in Combination Therapy",
-             subtitle = paste("KEGG Gene Sets from", cell_id, "in K7M2"))
-    }
-    print(plots[["KEGG"]][[cell_id]])
-    
-  }
-
-Idents(myeloid) <- myeloid$treatment
-myeloid_markers <- FindAllMarkers(myeloid,
-                              min.pct = 0.25,
-                              logfc.threshold = 0.25,
-                              only.pos = F)
-
-# Hard to work with this function/datatable so this step removes genes not in the top 10 DEG for all clusters 
-# Print top 10 in each cluster
-myeloid_markers %>%
-  group_by(cluster) %>%
-  top_n(n = 15, wt = avg_log2FC) -> t
-
-# Get dataframe into proper format 
-t <- as.data.frame(t)
-#t$cluster <- as.numeric(as.character(t$cluster))
-#t <- t[order(t$cluster),]
-t <- t[,c(7, 1:6)]
-t <- t[,c(7, 1:6)]
-#could also use arrange() to sort by column
+                           features = c("Gzmd",
+                                        "Gzme",
+                                        "Gzmc",
+                                        "Gzmf",
+                                        "Gzmg",
+                                        "Gzma",
+                                        "Gzmb",
+                                        "Prf1",
+                                        "Xcl1"),
+                           only.pos = T) %>%
+  arrange(-abs(avg_log2FC)) %>%
+  as.data.frame()
 
 # Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(t, 
+DT::datatable(nkt_markers, 
               rownames = FALSE,
               extensions = c('FixedColumns',
                              'Buttons'),
@@ -1621,442 +949,21 @@ DT::datatable(t,
                             'excel')
               ))
 
-DotPlot(myeloid,
-        features = unique(t$gene),
-        group.by = "clust_3",
-        scale = FALSE,
-        cols = c("lightgoldenrod", "darkred")) +
-  ggtitle("Myeloid cell DEGs between Treatments") +
-  RotatedAxis() + theme(axis.text.x = element_text(size = 5)) + theme(axis.text.y = element_text(size = 5)
+# Check fold change differences in trab. vs control
+FoldChange(nk_t,
+           ident.1 = "3 - Trabectedin",
+           ident.2 = "1 - Control",
+           features = c("Gzmd",
+                        "Gzme",
+                        "Gzmc",
+                        "Gzmf",
+                        "Gzmg",
+                        "Gzma",
+                        "Gzmb",
+                        "Prf1",
+                        "Xcl1")) %>%
+  print()
 ```
-
-
-```{r ifng,dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample")}
-k7m2_ifn_vln <- VlnPlot(K7M2_hsv_even,
-                        features = "Ifng",
-                        group.by = "treatment")
-k7m2_ifn_vln
-
-pdf("Plots/K7M2_2/k7m2_ab_vln.pdf", height = 5, width = 5)
-k7m2_ifn_vln
-dev.off()
-
-DotPlot(K7M2_hsv_even,
-        features = "Ifng",
-        scale = F,
-        group.by = "treatment",
-        cols = c("lightgoldenrod", "darkred"),
-        dot.min = 0)
-
-k7m2_ifn_feat <- r_feature_plot(K7M2_hsv_even,
-                                features = "Ifng",
-                                split.by = "treatment",
-                                order = TRUE) +
-  theme(aspect.ratio = 1)
-
-k7m2_ifn_feat 
-
-pdf("Plots/K7M2_2/k7m2_ifn_feat.pdf", height = 6, width = 12)
-k7m2_ifn_feat
-dev.off()
-```
-
-```{r tnk, fig.width=15, fig.height=15, eval =FALSE}
-TNK <- subset(K7M2_hsv_even,
-              idents = c("T cells",
-                         "NK cells",
-                         "NKT",
-                         "ILC"))
-
-DimPlot(TNK,
-        split.by = "treatment")
-
-TNK %>%
-  RunPCA() %>%
-  FindNeighbors(dims = 1:17) %>%
-  FindClusters() %>%
-  RunUMAP(dims = 1:17)
-
-DimPlot(TNK,
-        split.by = "treatment")
-
-FeaturePlot(TNK,
-            features = c("Cd8a",
-                         "Cd4",
-                         "Foxp3",
-                         "Nkg7"),
-            split.by = "treatment",
-            order = T,
-            pt.size = 0.5)
-
-FeaturePlot(TNK,
-            features = c("Tnf",
-                         "Ifng",
-                         "Gzmb",
-                         "Prf"),
-            split.by = "treatment",
-            order = T,
-            pt.size = 0.5)
-```
-
-```{r mac, fig.width=15, fig.height=15, eval=FALSE}
-Mac <- subset(K7M2_hsv_even,
-              idents = c("Macrophages",
-                         "Monocytes"))
-
-DimPlot(Mac,
-        split.by = "treatment")
-
-Mac %>%
-  RunPCA() %>%
-  FindNeighbors(dims = 1:17) %>%
-  FindClusters() %>%
-  RunUMAP(dims = 1:17)
-
-DimPlot(Mac,
-        split.by = "treatment")
-
-FeaturePlot(Mac,
-            features = c("Ccl2",
-                         "Cxcl5",
-                         "Cx3cl1",
-                         "Ccl7"),
-            split.by = "treatment",
-            order = T,
-            pt.size = 0.5)
-
-FeaturePlot(Mac,
-            features = c("Arg1",
-                         "Arg2",
-                         "Tgfb1",
-                         "Il1r"),
-            split.by = "treatment",
-            order = T,
-            pt.size = 0.5)
-
-#hi logfc in combo vs hsv
-FeaturePlot(K7M2_hsv_even,
-            features = c("Gzmd",
-                         "Gzme",
-                         "Ccl24",
-                         "Gzmf"),
-            split.by = "treatment",
-            order = T,
-            pt.size = 0.5)
-
-FeaturePlot(TNK,
-            features = c("Gzmd",
-                         "Gzme",
-                         "Gzmf"),
-            split.by = "treatment",
-            order = T,
-            pt.size = 0.5)
-
-VlnPlot(K7M2_hsv_even,
-        features = c("Gzmd",
-                     "Gzme",
-                     "Ccl24",
-                     "Gzmf"),
-        group.by = "treatment")
-
-DotPlot(K7M2_hsv_even,
-        features = c("Gzmd",
-                     "Gzme",
-                     "Ccl24",
-                     "Gzmf"),
-        group.by = "treatment",
-        scale = F)
-
-#lo/neg logfc in combo vs hsv
-FeaturePlot(K7M2_hsv_even,
-            features = c("S100a9",
-                         "S100a8",
-                         "Isg15",
-                         "Irg1"),
-            split.by = "treatment",
-            order = T,
-            pt.size = 0.5)
-
-DotPlot(K7M2_hsv_even,
-            features = c("S100a9",
-                         "S100a8",
-                         "Isg15",
-                         "Irg1"),
-            group.by = "treatment",
-        scale = F)
-```
-
-```{r dgea,dependson=c("define_samples","load","load-final","downsample","process","umap","umap5","downsample"), eval=F}
-library(msigdbr)
-library(clusterProfiler)
-library(RColorBrewer)
-source("dgea.R")
-# # Define function
-# DGEA <- function(data, 
-#                  spec = "mouse", 
-#                  category = "H") {
-#  
-#   if (spec == "human") {
-#   oref <- HumanPrimaryCellAtlasData()
-#   } else if (spec == "mouse") {
-#   oref <- MouseRNAseqData()
-#   } 
-#   
-#   # Preparing clusterProfiler to perform hypergeometric test on msigdb signatures
-#   if (spec == "human") {
-#     if (category == "H") {
-#     m_t2g.h <- msigdbr(species = "Homo sapiens", category = "H") %>%
-#       dplyr::select(gs_name, human_gene_symbol)
-#     m_t2n.h <- msigdbr(species = "Homo sapiens", category = "H") %>% 
-#       dplyr::select(gs_id, gs_name) 
-#     }
-#     #m_t2g=rbind(m_t2g.c2,m_t2g.c6)
-#     # msigdb signature to use
-#     msig.gene.set = m_t2g.h
-#     msig.name = m_t2n.h
-#     
-#   } 
-#   
-#   else if (spec == "mouse") {
-#     if (category == "H") {
-#       
-#     m_t2g.h <- msigdbr(species = "Mus musculus", category = "H") %>%
-#       dplyr::select(gs_name, gene_symbol)
-#     m_t2n.h <- msigdbr(species = "Mus musculus", category = "H") %>% 
-#       dplyr::select(gs_id, gs_name)
-#     #m_t2g=rbind(m_t2g.c2,m_t2g.c6)
-#     
-#     # msigdb signature to use
-#     msig.gene.set = m_t2g.h
-#     msig.name = m_t2n.h
-#     }
-#     
-#     else if (category == "C2") {
-#     m_t2g.c2 <- msigdbr(species = "Mus musculus", category = "C2") %>%
-#      dplyr::select(gs_name, gene_symbol)
-#     m_t2n.c2 <- msigdbr(species = "Mus musculus", category = "C2") %>%
-#      dplyr::select(gs_id, gs_name)
-#     
-#     # msigdb signature to use
-#     msig.gene.set = m_t2g.c2
-#     msig.name = m_t2n.c2
-#     }
-#     
-#     else if (category == "C7") {
-#     m_t2g.c7 <- msigdbr(species = "Mus musculus", category = "C7") %>%
-#       dplyr::select(gs_name, gene_symbol)
-#     m_t2n.c7 <- msigdbr(species = "Mus musculus", category = "C7") %>% 
-#       dplyr::select(gs_id, gs_name)
-#     #m_t2g=rbind(m_t2g.c7,m_t2g.c7)
-#     
-#     # msigdb signature to use
-#     msig.gene.set = m_t2g.c7
-#     msig.name = m_t2n.c7
-#     }
-#   }
-# 
-#   # getting log normalized data for specific cluster
-#   clust.ids = sort(unique(data@active.ident))
-#   new.cluster.ids = rep(NA, length(clust.ids))
-#   
-#   # store top 30 pathway enrichment analysis
-#   em = NULL
-#  
-#   for (i in 1:length(clust.ids)){
-#     clust <- GetAssayData(subset(x = data,idents=clust.ids[i]),slot="data")
-#     label <- rep(clust.ids[i],dim(clust)[2])
-#     # getting common genes
-#     common <- intersect(rownames(clust), rownames(oref)) #####
-#     # use only differential markers
-#     cluster.markers <- FindMarkers(data, ident.1 =clust.ids[i],
-#                                    logfc.threshold = 0.25, only.pos = TRUE) #logfc.threshold
-#     common <- intersect(common,rownames(cluster.markers))
-#     oref.common <- oref[common,]
-#     # pred.hpca <- SingleR(test = clust, ref = hpca.se.common, labels = hpca.se$label.main,
-#     #                      method="cluster",clusters=label)
-#     # new.cluster.ids[i]=pred.hpca$labels
-#     tmp <- enricher(rownames(cluster.markers), TERM2GENE = msig.gene.set, TERM2NAME = msig.name)
-#     em[[i]]=tmp@result[,c("ID", "p.adjust")] #pvalue/p.adjust
-#   }
-#   
-#   # heatmap of enrichment
-#   library(pheatmap)
-#   # get top 10 enrichments
-#   em.table.top10 = lapply(em,function(x) x[1:10,])
-#   # create dataframe for heatmap
-#   em.hm = NULL
-#   em.hm = data.frame(gene_set=unique(unlist(lapply(em.table.top10,function(x) rownames(x)))))
-#   
-#   for (i in 1:length(em.hm$gene_set)){
-#     for (j in 1:length(clust.ids)){
-#       em.hm[i,j+1]=em[[j]]$p.adjust[match(em.hm$gene_set[i],em[[j]]$ID)]
-#     }
-#   }
-#   rownames(em.hm)=em.hm[,1]
-#   em.hm=em.hm[,-1]
-#   em.hm[is.na(em.hm)]=1
-#    colnames(em.hm)=new.cluster.ids
-#    colnames(em.hm)=as.character(clust.ids)
-#   # 
-#    library(viridisLite)
-#    col.breaks=seq(-log10(1),min(max(-log10(em.hm))+1,18),by=0.5) #
-#    col=inferno(length(col.breaks)) # library(viridis) #
-#    col=c("white",colorRampPalette(brewer.pal(n = 7, name ="Reds"))(50)) #
-#    pheatmap(-log10(em.hm[,1:length(clust.ids)]),cluster_rows = TRUE,cluster_cols = TRUE, #
-#             cellwidth = 10,cellheight = 12,treeheight_row = 0,treeheight_col=0,
-#             color = col,scale='none',breaks=col.breaks,fontsize = 8)
-# 
-# }
-Idents(K7M2_hsv_even) <- K7M2_hsv_even$treatment
-subset(K7M2_hsv_even,
-       idents = c("2 - oHSV",
-                  "4 - oHSV+Trabectedin")) %>%
-DGEA(spec = "mouse")
-```
-
-# Treatment Differences
-
-```{r ipa, eval=F}
-Idents(K7M2_hsv_even) <- K7M2_hsv_even$treatment
-# maybe try with infected cells (what is changing in infected cells, not whole sample)
-trtdiff <- FindMarkers(K7M2_hsv_even,
-                       ident.1 = "4 - oHSV+Trabectedin",
-                       ident.2 = "2 - oHSV",
-                       logfc.threshold = 0.15,
-                       only.pos = F) %>%
-  arrange(-abs(avg_log2FC))
-
-trtdiff <- as.data.frame(trtdiff)
-trtdiff <- arrange(trtdiff, desc(avg_log2FC))
-
-# Save for use in IPA
-write.csv(trtdiff,
-          file = "Data/K7M2_hsv_even_trtdiff.csv")
-```
-
-## Compare to A673 DEGs
-
-```{r compare_modeldeg, fig.height=8, fig.width=20, eval=F}
-#Rename K7M2 all cell DEGs from Combination vs. oHSV comparison (logfc > 0.15)
-k7m2_trtdiff <- trtdiff
-
-#Load A673 tumor DEGs from Combination vs. oHSV comparison (logfc > 0.15)
-a673_trtdiff <- 
-  read.csv("Data/A673_comb_trtdiff.csv") %>%
-  dplyr::rename("gene" = "X")
-
-#Convert mouse gene names to human gene names for K7M2
-k7m2_trtdiff[["gene"]] <- 
-  convert_mouse_to_human_symbols(symbols = rownames(k7m2_trtdiff))
-
-#Find the shared genes between the two models' DEG lists
-##Filter so that logfc direction matches
-shared_trtdiff <- 
-  inner_join(x = a673_trtdiff,
-             y = k7m2_trtdiff,
-             by = "gene",
-             na_matches = "never") %>%
-  filter((avg_log2FC.x > 0 & avg_log2FC.y > 0) |
-           (avg_log2FC.x < 0 & avg_log2FC.y < 0))
-
-# Plot to check directionality
-
-shared_trtdiff[,c("gene",
-                  "avg_log2FC.x",
-                  "avg_log2FC.y")] %>%
-  dplyr::rename("A673" = "avg_log2FC.x",
-                "K7M2" = "avg_log2FC.y") %>%
-  tidyr::pivot_longer(!gene,
-                      names_to = "model",
-                      values_to = "avg_log2FC") %>%
-  ggplot(aes(x = reorder(gene, -avg_log2FC),
-             y = avg_log2FC,
-             fill = model)) + 
-  geom_bar(stat = 'identity',
-           position = 'dodge') +
-  xlab("Gene") +
-  ylab("Log2FC") +
-  theme(axis.text = element_text(size = 5)) +
-  RotatedAxis()
-
-# Create interactive datatable showing top 10 DEG in each cluster 
-DT::datatable(shared_trtdiff, 
-              rownames = FALSE,
-              extensions = c('FixedColumns',
-                             'Buttons'),
-              options = list(
-                pageLength = 10,
-                scrollX = TRUE,
-                scrollCollapse = TRUE,
-                dom = 'Bfrtip',
-                buttons = c('copy',
-                            'csv',
-                            'excel')
-              ))
-
-
-# library(org.Hs.eg.db)
-# mapIds(org.Hs.eg.db, c("2475", "842", "3065", "5525", "80351", "1937", "572", "84447", "4041", "9846", "8322"), "SYMBOL","ENTREZID")
-#select(org.Hs.eg.db, c("2475", "842", "3065", "5525", "80351", "1937", "572", "84447", "4041", "9846", "8322"), "SYMBOL","ENTREZID")
-## Plot expression onto pathway
-library(limma)
-kegglists <- getGeneKEGGLinks("hsa")
-head(kegglists)
-hsa05168_genes <- subset(kegglists,
-                         kegglists$PathwayID == "hsa05168")
-library(org.Hs.eg.db)
-hsa05168_genes[["GeneSymbol"]] <- mapIds(org.Hs.eg.db,
-                                         hsa05168_genes[["GeneID"]],
-                                         "SYMBOL",
-                                         "ENTREZID")
-
-intersect(hsa05168_genes[["GeneSymbol"]],
-          shared_trtdiff[["gene"]])
-##"IFNAR2" "NFKBIA" "B2M" "STAT1"
-shared_trtdiff %>%
-  filter(gene == "IFNAR2" |
-           gene == "NFKBIA" |
-           gene =="B2M" |
-           gene =="STAT1")
-## gene %in% c(....)
-```
-
-
-# NicheNet
-
-```{r niche, eval=F}
-myeloid_nkt <- merge(x = myeloid,
-                     y = nkt,
-                     add.cell.ids = c("Myeloid",
-                                      "T_NK"))
-Idents(nkt) <- nkt$treatment
-tnk_tar <- find_tar_genes(nkt,
-                          id1 = "4 - oHSV+Trabectedin",
-                          id2 = "2 - oHSV",
-                          pval = 0.05,
-                          logfc = 0.15,
-                          spec = "mouse")
-
-Idents(myeloid_nkt) <- myeloid_nkt$SingleR2ed
-mye_ligands_nkt_rec <- find_ligands(myeloid_nkt,
-                            gset = tnk_tar,
-                            receiver = c("T cells",
-                                         "NK cells",
-                                         "ILC",
-                                         "NKT"),
-                            senders = c("DC",
-                                        "Macrophages",
-                                        "Monocytes"),
-                            gset_spec = "mouse",
-                            rec_spec = "mouse",
-                            send_spec = "mouse")
-
-plot_complex_heatmap(mye_ligands_nkt_reclub)
-
-##run on just NK and just T
-##NK -> DC -> T
-```
-
 
 ```{r}
 sessionInfo()
